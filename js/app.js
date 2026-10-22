@@ -2,6 +2,7 @@ window.PortfolioApp = (() => {
     let data = { projectGroups: [] };
     let savedOnly = false;
     let installPrompt = null;
+    let allProjects = false;
     const key = (group, project) => `${group.id}:${project.id}`;
     function saved() {
         try { const values = JSON.parse(localStorage.getItem('savedProjects') || '[]'); return Array.isArray(values) ? values : []; }
@@ -17,15 +18,19 @@ window.PortfolioApp = (() => {
         const query = document.getElementById('project-search').value.trim().toLowerCase();
         const results = document.getElementById('project-results');
         const groups = document.getElementById('projects-grid');
-        const active = Boolean(query || savedOnly);
+        const category = document.getElementById('project-category').value;
+        const sort = document.getElementById('project-sort').value;
+        const active = Boolean(query || savedOnly || category || allProjects || sort !== 'recent');
+        document.getElementById('clear-project-filters').hidden = !active;
         if (!active) document.getElementById('project-result-count').textContent = '';
         groups.hidden = active;
         results.hidden = !active;
         results.replaceChildren();
         if (!active) return;
         const matches = (data.projectGroups || []).flatMap(group => (group.projects || []).map(project => ({ group, project })))
-            .filter(({ group, project }) => (!savedOnly || saved().includes(key(group, project))) &&
-                [project.title, project.description, group.name, ...(project.technologies || [])].join(' ').toLowerCase().includes(query));
+            .filter(({ group, project }) => (!category || String(group.id) === category) && (!savedOnly || saved().includes(key(group, project))) &&
+                [project.title, project.description, group.name, ...(project.technologies || [])].join(' ').toLowerCase().includes(query))
+            .sort((a, b) => sort === 'title' ? String(a.project.title).localeCompare(String(b.project.title)) : Number(b.project.id) - Number(a.project.id));
         document.getElementById('project-result-count').textContent = `${matches.length} project${matches.length === 1 ? '' : 's'} found`;
         if (!matches.length) {
             const empty = document.createElement('p');
@@ -76,10 +81,73 @@ window.PortfolioApp = (() => {
                 if (error.name !== 'AbortError') announce(`Project link: ${url}`);
             }
         });
-        const contact = document.createElement('a'); contact.href = '#contact'; contact.className = 'btn primary'; contact.textContent = 'Discuss a project';
+        const contact = document.createElement('a'); contact.href = '#contact'; contact.className = 'btn primary'; contact.textContent = 'Discuss a similar project';
+        contact.addEventListener('click', () => {
+            document.getElementById('inquiry-context').textContent = `Regarding: ${project.title}`;
+            document.getElementById('inquiry-context').hidden = false;
+            document.getElementById('out-message').focus({ preventScroll: true });
+        });
         actions.append(save, share, contact);
         container.append(actions);
     }
+    function resetView() {
+        savedOnly = false; allProjects = false;
+        document.getElementById('project-search').value = '';
+        document.getElementById('project-category').value = '';
+        document.getElementById('project-sort').value = 'recent';
+        document.getElementById('saved-projects').setAttribute('aria-pressed', 'false');
+        document.getElementById('all-projects').setAttribute('aria-pressed', 'false');
+        search();
+    }
+    function setData(value) {
+        data = value;
+        const selector = document.getElementById('project-category');
+        const previous = selector.value;
+        selector.replaceChildren(new Option('Every category', ''));
+        (data.projectGroups || []).forEach(group => selector.append(new Option(group.name, group.id)));
+        selector.value = previous;
+        const personal = data.personal || {};
+        const name = personal.name || 'George Ochieng';
+        document.getElementById('profile-card-name').textContent = name;
+        document.getElementById('profile-card-role').textContent = personal.title || 'Data Scientist & Web Developer';
+        document.getElementById('profile-monogram').textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase();
+        document.getElementById('profile-monogram').hidden = Boolean(personal.profileImage);
+        document.getElementById('credentials-count').textContent = data.certifications?.length || 0;
+        document.getElementById('footer-text').textContent = data.footer || `${new Date().getFullYear()} ${name}. Let's build something useful.`;
+        document.title = `${name} | Work, Credentials & Collaboration`;
+        const spotlight = document.getElementById('spotlight-grid');
+        spotlight.replaceChildren();
+        const projects = (data.projectGroups || []).flatMap(group => (group.projects || []).map(project => ({ group, project }))).sort((a, b) => Number(b.project.id) - Number(a.project.id)).slice(0, 3);
+        document.getElementById('spotlight').hidden = !projects.length;
+        projects.forEach(({ group, project }, index) => {
+            const button = document.createElement('button'); button.className = 'featured-project';
+            const media = document.createElement('div'); media.className = 'featured-project-media';
+            const placeholder = document.createElement('span'); placeholder.textContent = `0${index + 1}`;
+            const source = Credentials.url(project.images?.[0], true);
+            if (source) {
+                const image = document.createElement('img'); image.src = source; image.alt = project.title; image.loading = 'lazy';
+                image.addEventListener('error', () => media.replaceChildren(placeholder)); media.append(image);
+            } else media.append(placeholder);
+            const content = document.createElement('div'); content.className = 'featured-project-body';
+            const category = document.createElement('span'); category.textContent = group.name;
+            const heading = document.createElement('h3'); heading.textContent = project.title;
+            const description = document.createElement('p'); description.textContent = project.description || 'View the project, its process, and supporting details.';
+            content.append(category, heading, description); button.append(media, content);
+            button.addEventListener('click', () => showProjectDetail(group.id, project.id));
+            spotlight.append(button);
+        });
+        search();
+    }
+    document.getElementById('project-category').addEventListener('change', search);
+    document.getElementById('project-sort').addEventListener('change', search);
+    document.getElementById('all-projects').addEventListener('click', event => { allProjects = !allProjects; event.currentTarget.setAttribute('aria-pressed', String(allProjects)); search(); });
+    document.getElementById('clear-project-filters').addEventListener('click', resetView);
+    const quickNav = document.getElementById('quick-nav');
+    document.getElementById('open-quick-nav').addEventListener('click', () => quickNav.showModal());
+    document.getElementById('close-quick-nav').addEventListener('click', () => quickNav.close());
+    quickNav.querySelectorAll('a').forEach(link => link.addEventListener('click', () => quickNav.close()));
+    document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); if (quickNav.open) quickNav.close(); else quickNav.showModal(); } });
+    document.querySelectorAll('[data-inquiry-service]').forEach(link => link.addEventListener('click', () => { document.getElementById('inquiry-service').value = link.dataset.inquiryService; }));
     document.getElementById('project-search').addEventListener('input', search);
     document.getElementById('saved-projects').addEventListener('click', event => {
         savedOnly = !savedOnly;
@@ -104,13 +172,5 @@ window.PortfolioApp = (() => {
     window.addEventListener('offline', connectionStatus);
     connectionStatus();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-    return {
-        setData(value) { data = value; search(); }, renderProjectActions, announce,
-        resetView() {
-            savedOnly = false;
-            document.getElementById('project-search').value = '';
-            document.getElementById('saved-projects').setAttribute('aria-pressed', 'false');
-            search();
-        }
-    };
+    return { setData, renderProjectActions, announce, resetView };
 })();

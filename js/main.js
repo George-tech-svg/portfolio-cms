@@ -77,7 +77,7 @@ function renderPublicPortfolio() {
     if (data.personal) {
         const heroTitle = document.getElementById('hero-title');
         if (heroTitle) {
-            heroTitle.innerHTML = `Hi, I'm <span>${Credentials.escape(data.personal.name || 'Your Name')}</span>`;
+            heroTitle.innerHTML = `Hi, I'm <span>${Credentials.escape(data.personal.name || 'George Ochieng')}</span>`;
         }
         
         const heroSubtitle = document.getElementById('hero-subtitle');
@@ -143,8 +143,7 @@ function renderPublicPortfolio() {
     const clientsCount = document.getElementById('clients-count');
     if (clientsCount) clientsCount.textContent = portfolioData.projectGroups?.length || 0;
     
-    const experienceCount = document.getElementById('experience-count');
-    if (experienceCount) experienceCount.textContent = portfolioData.experience?.length || 0;
+
 
     // --- About Section ---
     if (data.about && data.about.paragraphs) {
@@ -698,7 +697,15 @@ function initContactModes() {
             const email = document.getElementById('out-email').value.trim();
             const replyContact = document.getElementById('out-reply-contact').value.trim();
             const rawMessage = document.getElementById('out-message').value.trim();
-            const message = replyContact ? `Reply contact: ${replyContact}\n\n${rawMessage}` : rawMessage;
+            const service = document.getElementById('inquiry-service');
+            const timeline = document.getElementById('inquiry-timeline').value;
+            const budget = document.getElementById('inquiry-budget').value.trim();
+            const context = document.getElementById('inquiry-context');
+            const details = [`Inquiry: ${service.selectedOptions[0].textContent}`, !context.hidden ? context.textContent : '', timeline ? `Timeline: ${timeline}` : '', budget ? `Budget: ${budget}` : '', replyContact ? `Reply contact: ${replyContact}` : ''].filter(Boolean).join('\n');
+            const message = `${details}\n\n${rawMessage}`;
+            const feedback = document.getElementById('inquiry-feedback');
+            feedback.textContent = 'Sending your inquiry...';
+            feedback.dataset.error = 'false';
             const activeChannel = document.querySelector('.channel-select button.active-channel');
             const channel = activeChannel ? activeChannel.dataset.channel : 'email';
 
@@ -712,14 +719,16 @@ function initContactModes() {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('Your message is saved. I will reply using your preferred contact details.');
+                    feedback.textContent = 'Your message is saved. Thank you for reaching out. I will reply using your preferred contact details.';
+                    context.hidden = true;
                     outForm.reset();
                 } else {
-                    alert('❌ Failed to send message: ' + (data.error || 'Unknown error'));
+                    throw new Error(data.error || 'Unable to send your inquiry.');
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                alert(error.message || 'Unable to send your message. Please try again.');
+                feedback.textContent = error.message || 'Unable to send your message. Please try again.';
+                feedback.dataset.error = 'true';
             } finally { submit.disabled = false; }
         });
     }
@@ -1017,5 +1026,8 @@ if ('IntersectionObserver' in window) {
 // INIT
 // ============================================
 
-document.addEventListener('DOMContentLoaded', loadPublicData);
+document.addEventListener('DOMContentLoaded', () => {
+    initContactModes(); initChat(); initAuthModal(); publicUIReady = true;
+    loadPublicData();
+});
 console.log('✅ main.js loaded and ready!');

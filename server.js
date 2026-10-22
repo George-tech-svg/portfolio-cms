@@ -330,8 +330,8 @@ async function setupDatabase() {
 // CORS - Use environment variable
 // ============================================
 const allowedOrigins = new Set([
-    'https://portfolio-cms-seven-blush.vercel.app',
-    'http://localhost:3000', 'http://127.0.0.1:3000',
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.replace(/\/$/, '')] : []),
+    'http://localhost:4173', 'http://127.0.0.1:4173', 'http://localhost:3000', 'http://127.0.0.1:3000',
     ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean)
 ]);
 
@@ -827,6 +827,19 @@ app.delete('/api/admin/out-messages/:id', authenticateToken, async (req, res) =>
 });
 
 // ADMIN CRUD ROUTES
+
+app.get('/api/admin/overview', authenticateToken, async (req, res) => {
+    try {
+        const result = await query(`SELECT
+            (SELECT COUNT(*)::int FROM contact_out) AS inquiries,
+            (SELECT COUNT(*)::int FROM conversations) AS conversations,
+            (SELECT COUNT(*)::int FROM certifications WHERE file IS NOT NULL AND length(trim(file)) > 0) AS credential_files,
+            (SELECT COUNT(*)::int FROM projects) AS projects,
+            (SELECT COUNT(*)::int FROM about_paragraphs) AS about_paragraphs,
+            EXISTS(SELECT 1 FROM profile WHERE name IS NOT NULL AND trim(name) <> '' AND name <> 'Your Name' AND email IS NOT NULL AND trim(email) <> '' AND email <> 'your.email@gmail.com') AS profile_ready`);
+        res.json({ success: true, overview: result.rows[0] });
+    } catch (error) { res.status(500).json({ error: 'Unable to load your workspace overview.' }); }
+});
 
 // Profile
 app.put('/api/profile', authenticateToken, async (req, res) => {

@@ -1,63 +1,39 @@
-Current deployment: [Vercel frontend](https://portfolio-cms-seven-blush.vercel.app/) + [Render API](https://portfolio-0umz.onrender.com). See [DEPLOYMENT.md](DEPLOYMENT.md) for the current build, environment, and verification instructions.
+# George's Portfolio App
 
-# 🚀 Personal Portfolio CMS
+A workspace for discovering projects, viewing actual credentials, saving interesting work, and starting a project conversation. Built with HTML, CSS, JavaScript, Express, PostgreSQL, and Cloudinary.
 
-A **full‑stack portfolio website** with a built‑in Content Management System (CMS).  
-It allows you to showcase your projects, skills, experience, certifications, and contact information – all updatable through a clean admin panel.  
-The public view is beautifully designed, fully responsive, and optimised for all devices.
+The public app includes recent project highlights, search, category filters, sorting, saved projects, shareable project screens, photos and videos, case study text, downloadable attachments, image/PDF credential viewing, quick navigation, dark mode, and installation support.
 
-🔗 **Live Demo:** [ochiengportfolio.netlify.app](https://ochiengportfolio.netlify.app)
+Visitors can submit structured project inquiries or register for website chat. The owner workspace manages content, credentials, uploads, resumes, inquiries, and conversations, with a readiness checklist and inquiry counts.
 
----
+## Run locally
 
-## ✨ Features
+```powershell
+npm ci
+npm start
+```
 
-- **Dynamic Portfolio** – All content (profile, projects, skills, experience, education, certifications, social links) is stored in a database and rendered on the public site.
-- **Admin Panel** – Manage every section of your portfolio from a dedicated dashboard – no coding required.
-- **Project Management** – Organise projects into groups. Each project can have:
-  - Multiple images and videos (uploaded via Cloudinary).
-  - A detailed README written in Markdown.
-  - File attachments (PDFs, documents, etc.).
-  - GitHub and live demo links.
-- **Contact System** with two modes:
-  - **Out Conversation** – Visitors can send a message via their preferred channel (Email, WhatsApp, or Phone).
-  - **In Conversation** – Real‑time chat inside the website (visitors register/login to chat).
-- **Skills Management** – Easily add/edit/delete skill categories and individual skills.
-- **Modern UI** – Green/blue theme, glassmorphism, animated blobs, dark/light mode toggle.
-- **Fully Responsive** – Works perfectly on phones, tablets, and desktops.
-- **SEO Friendly** – Meta tags, sitemap, and semantic HTML to help search engines index your portfolio.
+In another terminal:
 
----
+```powershell
+npm run build:frontend
+npm run preview
+```
 
-## 🛠️ Tech Stack
+Open `http://127.0.0.1:4173`. The backend reads your private `.env` file; see `.env.example`. Your existing database and Cloudinary account can be reused.
 
-### Frontend
-- HTML5, CSS3, JavaScript (vanilla)
-- [Font Awesome](https://fontawesome.com/) – Icons
-- [Marked](https://marked.js.org/) – Markdown rendering for project READMEs
-- Hosted on **Netlify**
+## Fresh deployment
 
-### Backend
-- Node.js / Express
-- PostgreSQL (via Neon)
-- Cloudinary – image/video storage
-- Hosted on **Render**
+**Vercel serves the frontend in `dist/`. Render runs the Node API with `npm start`.**
 
----
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the order and settings, [the backend environment template](.env.example), and [the public frontend environment template](.env.frontend.example). Frontend builds accept `PUBLIC_API_BASE_URL` and `PUBLIC_SITE_URL`, so new domains do not require source edits. `render.yaml` configures a fresh backend service.
 
-## 📁 Project Structure
+## Verification
 
-```plaintext
-portfolio-cms/
-├── css/                 # Stylesheets
-├── js/                  # Frontend JavaScript
-├── uploads/             # Local uploads (if any)
-├── index.html           # Public portfolio
-├── admin.html           # Admin panel
-├── login.html           # Admin login page
-├── register.html        # Admin registration page
-├── terms.html           # Terms & Conditions
-├── privacy.html         # Privacy Policy
-├── server.js            # Backend server
-├── package.json         # Node dependencies
-└── README.md            # This file
+```powershell
+npm test
+node tests/portfolio.browser.cjs
+node tests/portfolio.browser.cjs --admin
+```
+
+Backend tests use a fake database. Browser checks use fixture content and an installed Chromium browser. Deployment still needs its real database, Cloudinary account, and final frontend/API origins configured.

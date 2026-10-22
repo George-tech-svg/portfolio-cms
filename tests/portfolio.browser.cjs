@@ -50,6 +50,7 @@ window.fetch = async (url, options = {}) => {
         window.saveRequests.push(JSON.parse(options.body));
         return { ok: !window.rejectSave, status: window.rejectSave ? 500 : 200, json: async () => ({ success: !window.rejectSave, error: 'Test save failure' }) };
     }
+    if (url.endsWith('/api/admin/overview')) return { ok: true, status: 200, json: async () => ({ success: true, overview: { inquiries: 2, conversations: 1, credential_files: 2, projects: 1, about_paragraphs: 0, profile_ready: true } }) };
     if (url.endsWith('/api/messages')) return { ok: true, status: 200, json: async () => [] };
     return { ok: true, status: 200, json: async () => window.fixture };
 };
@@ -59,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
     const failures = [];
     function check(condition, message) { if (!condition) failures.push(message); }
     try {
+        check(document.getElementById('owner-overview').textContent.includes('2 project inquiries'), 'Owner dashboard shows inquiry totals');
+        check(document.querySelectorAll('.owner-checklist button').length === 4, 'Owner dashboard lists content readiness');
         await editCertification(1);
         check(document.querySelector('#certFilePreview img'), 'Saved certificate image previews in the editor');
         check(document.getElementById('certFile').files.length === 0, 'Editor clears previous file selection');
@@ -109,13 +112,13 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         check(document.querySelector('.credential-preview img')?.src.startsWith('data:image/png'), 'Actual uploaded photo renders');
         check(document.querySelectorAll('.certification-card')[2].querySelectorAll('img, a').length === 0, 'Untrusted credential text and URL remain inert');
         document.querySelector('.credential-thumbnail').click();
-        check(document.querySelector('dialog')?.open && document.querySelector('dialog img'), 'Image viewer opens');
-        document.querySelector('dialog button').click();
+        check(document.querySelector('.credential-dialog')?.open && document.querySelector('.credential-dialog img'), 'Image viewer opens');
+        document.querySelector('.credential-dialog button').click();
         await new Promise(resolve => setTimeout(resolve, 100));
-        check(!document.querySelector('dialog'), 'Viewer closes and removes itself');
+        check(!document.querySelector('.credential-dialog'), 'Viewer closes and removes itself');
         document.querySelectorAll('.certification-card')[1].querySelector('button').click();
-        check(document.querySelector('dialog iframe')?.src.startsWith('blob:'), 'PDF data becomes a viewable Blob URL');
-        document.querySelector('dialog button').click();
+        check(document.querySelector('.credential-dialog iframe')?.src.startsWith('blob:'), 'PDF data becomes a viewable Blob URL');
+        document.querySelector('.credential-dialog button').click();
         await new Promise(resolve => setTimeout(resolve, 100));
         document.querySelector('.group-card').click();
         check(location.hash === '#projects/group/1', 'Group has a shareable URL');
@@ -137,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         await loadPublicData();
         check(document.getElementById('load-status').hidden, 'Retry recovers from API failure');
         check(document.documentElement.scrollWidth <= innerWidth, 'Mobile page has no horizontal overflow');
+        check(getComputedStyle(document.querySelector('body > nav:not(.app-dock)')).position === 'fixed', 'Base styles apply without an external font import');
         check(getComputedStyle(document.getElementById('authModal')).display === 'none', 'Login modal starts hidden');
         const search = document.getElementById('project-search');
         search.value = 'Sample'; search.dispatchEvent(new Event('input'));
@@ -169,9 +173,27 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         document.getElementById('out-form').dispatchEvent(new Event('submit', { cancelable: true }));
         await new Promise(resolve => setTimeout(resolve, 100));
         check(window.saveRequests.at(-1)?.message.includes('+254700000000'), 'Contact saves reply details');
-        check(window.alerts.at(-1)?.includes('message is saved'), 'Contact confirms the actual saved behavior');
+        check(document.getElementById('inquiry-feedback').textContent.includes('message is saved'), 'Contact confirms the actual saved behavior');
         check(!document.querySelector('#out-form [type=submit]').disabled, 'Contact form recovers after sending');
         check(document.querySelector('link[rel=manifest]') && document.getElementById('install-app'), 'App installation is declared');
+        document.getElementById('open-quick-nav').click();
+        check(document.getElementById('quick-nav').open, 'Quick navigation opens');
+        document.getElementById('close-quick-nav').click();
+        const category = document.getElementById('project-category'); category.value = '1'; category.dispatchEvent(new Event('change'));
+        check(document.querySelectorAll('.explorer-result').length === 1, 'Category filter finds the right work');
+        document.getElementById('clear-project-filters').click();
+        check(!document.getElementById('projects-grid').hidden, 'Clear filters restores category browsing');
+        check(document.querySelectorAll('.featured-project').length === 1, 'Recent work is featured on the overview');
+        document.querySelector('[data-inquiry-service=web]').click();
+        check(document.getElementById('inquiry-service').value === 'web', 'Service inquiry chooses the right project type');
+        document.querySelector('.featured-project').click();
+        document.querySelector('.project-app-actions a').click();
+        check(!document.getElementById('inquiry-context').hidden && document.getElementById('inquiry-context').textContent.includes('Sample project'), 'Project discussion carries context to inquiry');
+        document.documentElement.style.scrollBehavior = 'auto';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(document.querySelector('.hero-content').getBoundingClientRect().right <= innerWidth + 1, 'Hero stays within the mobile viewport');
+        check(document.querySelector('.nav-actions').getBoundingClientRect().right <= innerWidth + 1, 'Header actions stay within the mobile viewport');
     } catch (error) { failures.push(error.stack); }
     failures.push(...window.browserErrors);
     const result = document.createElement('pre');
@@ -196,9 +218,10 @@ const server = http.createServer((req, res) => {
 server.listen(0, '127.0.0.1', () => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-browser-'));
     execFile(browser, [
-        '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+        '--headless=new', '--force-device-scale-factor=1', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
         '--disable-background-networking', '--window-size=' + (process.env.PORTFOLIO_TEST_WIDTH || '390') + ',844', '--hide-scrollbars',
-        '--virtual-time-budget=9000', '--dump-dom', '--user-data-dir=' + profile,
+        '--virtual-time-budget=11000', '--dump-dom', '--user-data-dir=' + profile,
+        ...(process.env.PORTFOLIO_TEST_SCREENSHOT ? ['--screenshot=' + path.resolve(process.env.PORTFOLIO_TEST_SCREENSHOT)] : []),
         `http://127.0.0.1:${server.address().port}/${adminMode ? 'admin.html' : ''}`
     ], { windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
         server.close();
@@ -207,7 +230,7 @@ server.listen(0, '127.0.0.1', () => {
             const result = stdout.match(/<pre id="qa-result">([\s\S]*?)<\/pre>/);
             assert.ok(result, 'Browser checks completed');
             assert.equal(result[1], 'PASS');
-            console.log(adminMode ? 'PASS: admin certificate preview, stale selection reset, failed save, preserved file, and image upload.' : 'PASS: credentials, project navigation, search, saved projects, registration, chat, contact, retry, mobile layout, and no browser errors.');
+            console.log(adminMode ? 'PASS: owner dashboard, readiness checklist, certificate preview, save failures, image upload, and attachment preservation.' : 'PASS: credentials, project navigation, search, saved projects, registration, chat, contact, retry, mobile layout, and no browser errors.');
         } catch (failure) { console.error(failure.message); process.exitCode = 1; }
         // Delete only the unique temporary profile created by this process.
         if (profile.startsWith(path.join(os.tmpdir(), 'portfolio-browser-'))) {

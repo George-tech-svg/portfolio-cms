@@ -1,6 +1,6 @@
 // One backend address for public pages, admin pages, and authentication.
 window.PortfolioAPI = {
-    baseURL: 'https://portfolio-0umz.onrender.com',
+    baseURL: (window.PORTFOLIO_CONFIG?.apiBaseURL || 'http://localhost:3000').replace(/\/$/, ''),
     async fetch(url, options = {}) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 60000);

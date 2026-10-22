@@ -134,6 +134,7 @@ async function saveData(sections = ['profile', 'about']) {
 // ============================================
 
 function renderAll() {
+    renderOwnerOverview();
     renderProfileForm();
     renderSkillsList();
     renderGroupsList();
@@ -146,6 +147,33 @@ function renderAll() {
     renderWelcomeVideoPreview();
     updateGroupSelect();
     updateDashboard();
+}
+
+async function renderOwnerOverview() {
+    const container = document.getElementById('owner-overview');
+    try {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/admin/overview`, { headers: getAuthHeaders() });
+        const result = await response.json();
+        const summary = result.overview || {};
+        container.replaceChildren();
+        const heading = document.createElement('h3'); heading.textContent = 'Ready for your next opportunity';
+        const stats = document.createElement('p'); stats.textContent = `${summary.inquiries || 0} project inquiries / ${summary.conversations || 0} conversations / ${summary.credential_files || 0} visible credential files`;
+        const inbox = document.createElement('button'); inbox.className = 'btn primary'; inbox.textContent = 'Open project inquiries'; inbox.addEventListener('click', () => switchTab('out-messages'));
+        const checklist = document.createElement('div'); checklist.className = 'owner-checklist';
+        [
+            { ready: summary.profile_ready, label: 'Name and contact details', tab: 'profile' },
+            { ready: summary.about_paragraphs > 0, label: 'Your story and background', tab: 'profile' },
+            { ready: summary.projects > 0, label: 'Projects to explore', tab: 'projects' },
+            { ready: summary.credential_files > 0, label: 'Actual certificate files', tab: 'certifications' }
+        ].forEach(item => {
+            const button = document.createElement('button'); button.type = 'button'; button.dataset.ready = String(Boolean(item.ready));
+            button.textContent = `${item.ready ? 'Ready' : 'Add'}: ${item.label}`;
+            button.addEventListener('click', () => switchTab(item.tab)); checklist.append(button);
+        });
+        container.append(heading, stats, inbox, checklist);
+    } catch {
+        container.textContent = 'Your workspace overview is unavailable. You can still manage your content using the sidebar.';
+    }
 }
 
 // ============================================

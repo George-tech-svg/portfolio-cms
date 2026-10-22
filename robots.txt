@@ -3,4 +3,3 @@ Allow: /
 Disallow: /admin.html
 Disallow: /login.html
 Disallow: /register.html
-Sitemap: https://portfolio-cms-seven-blush.vercel.app/sitemap.xml

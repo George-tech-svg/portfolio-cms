@@ -19,14 +19,12 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="apple-touch-icon" href="assets/icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="canonical" href="https://portfolio-cms-seven-blush.vercel.app/">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/app.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
 </head>
-<body>
+<body class="portfolio-app">
     <a class="skip-link" href="#about">Skip to content</a>
     <div id="connection-status" class="connection-status" role="status" hidden></div>
     <div id="app-status" class="app-status" role="status" aria-live="polite"></div>
@@ -35,7 +33,7 @@
 
     <nav>
         <div class="container nav-container">
-            <a href="#" class="logo" id="logo">Dev<span>.</span></a>
+            <a href="#" class="logo" id="logo">George<span>.</span></a>
             <div class="nav-links" id="navLinks">
                 <a href="#projects">Projects</a>
                 <a href="#skills">Skills</a>
@@ -46,7 +44,7 @@
                 <a href="#contact">Contact</a>
             </div>
             <div class="nav-actions">
-                <button id="install-app" class="install-app" hidden>Install app</button>
+                <button id="open-quick-nav" class="quick-nav-trigger" aria-label="Quick navigation, Control K">Find <kbd>Ctrl K</kbd></button>
                 <a href="#" id="resume-link" class="btn-resume" download style="display:none;"><i class="fas fa-file-pdf"></i> Resume</a>
                 <button id="theme-toggle" aria-label="Toggle color theme"><i class="fas fa-moon"></i></button>
                 <button class="hamburger" id="hamburger" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false"><span></span><span></span><span></span></button>
@@ -55,16 +53,14 @@
     </nav>
 
     <section id="hero">
-        <div class="hero-blob blob-1"></div>
-        <div class="hero-blob blob-2"></div>
-        <div class="hero-blob blob-3"></div>
-        <div class="hero-blob blob-4"></div>
         <div class="container hero-content">
             <div class="hero-text">
+                <div class="eyebrow">THE INTERSECTION OF DATA &amp; DIGITAL</div>
                 <span class="badge" id="hero-badge">👋 Welcome</span>
-                <h1 id="hero-title">Hi, I'm <span>Your Name</span></h1>
-                <p id="hero-subtitle">Web Developer creating amazing experiences</p>
+                <h1 id="hero-title">Hi, I'm <span>George.</span></h1>
+                <p id="hero-subtitle">Data science, thoughtful development, and ideas brought to life. Explore what I do, how I work, and what we could build together.</p>
                 <div class="hero-buttons">
+                    <button id="install-app" class="install-app" hidden>Install this app</button>
                     <a href="#projects" class="btn secondary">Explore my work</a>
                     <a href="#contact" class="btn primary">Discuss a Project <i class="fas fa-arrow-right"></i></a>
                     <a href="#" id="resume-btn" class="btn secondary" download style="display:none;"><i class="fas fa-file-pdf"></i> Download Resume</a>
@@ -72,12 +68,18 @@
                 <div class="hero-stats">
                     <div class="stat"><span class="stat-number" id="projects-count">0</span><span class="stat-label">Projects</span></div>
                     <div class="stat"><span class="stat-number" id="clients-count">0</span><span class="stat-label">Project Categories</span></div>
-                    <div class="stat"><span class="stat-number" id="experience-count">0</span><span class="stat-label">Experience Entries</span></div>
+                    <div class="stat"><span class="stat-number" id="credentials-count">0</span><span class="stat-label">Credentials</span></div>
                 </div>
             </div>
             <div class="hero-image">
+                <div class="profile-card">
+                <div class="profile-card-top"><span>MEET THE BUILDER</span><span class="profile-dot" aria-hidden="true"></span></div>
                 <div class="profile-wrapper">
-                    <img src="" alt="Profile" id="profile-img" onerror="this.style.display='none'">
+                    <div id="profile-monogram" class="profile-monogram" aria-hidden="true">GO</div>
+                    <img src="" alt="Profile" id="profile-img" onerror="this.style.display='none';document.getElementById('profile-monogram').hidden=false;">
+                </div>
+                <div class="profile-card-details"><h2 id="profile-card-name">George Ochieng</h2><p id="profile-card-role">Data Scientist &amp; Web Developer</p></div>
+                <div class="profile-card-links"><a href="#projects">View work <span aria-hidden="true">&rarr;</span></a><a href="#certifications">My credentials <span aria-hidden="true">&rarr;</span></a></div>
                 </div>
             </div>
         </div>
@@ -87,17 +89,29 @@
         </div>
     </section>
 
+    <section id="start-here" class="start-here">
+        <div class="container start-layout"><div><span class="eyebrow">TAKE A CLOSER LOOK</span><h2>More than a first impression.</h2></div>
+            <a href="#projects"><span class="path-number">01</span><div><h3>Explore the work</h3><p>Projects, process, and the tools behind them.</p></div><span aria-hidden="true">&rarr;</span></a>
+            <a href="#certifications"><span class="path-number">02</span><div><h3>See the credentials</h3><p>View the actual certificates and qualifications.</p></div><span aria-hidden="true">&rarr;</span></a>
+            <a href="#contact"><span class="path-number">03</span><div><h3>Build something together</h3><p>Tell me what you have in mind.</p></div><span aria-hidden="true">&rarr;</span></a>
+        </div>
+    </section>
+    <section id="spotlight" hidden><div class="container"><div class="section-header split-header"><div><span class="label">A closer look</span><h2>From idea <span>to execution.</span></h2></div><a href="#projects" class="text-link">Explore the complete collection &rarr;</a></div><div id="spotlight-grid" class="spotlight-grid"></div></div></section>
     <section id="projects">
         <div class="container">
             <div class="section-header">
                 <span class="label">My Work</span>
                 <h2>Featured <span>Projects</span></h2>
-                <p>Each project is crafted with attention to detail and user experience</p>
+                <p>Explore by category, search for a technology, or save a project to revisit.</p>
             </div>
             <div class="project-explorer" role="search" aria-label="Find projects">
                 <div class="project-search-field"><label for="project-search">Find something interesting</label><input id="project-search" type="search" placeholder="Search projects, skills or technologies..." autocomplete="off"></div>
+                <label class="explorer-select">Category<select id="project-category"><option value="">Every category</option></select></label>
+                <label class="explorer-select">Sort by<select id="project-sort"><option value="recent">Newest first</option><option value="title">Project name</option></select></label>
+                <button id="all-projects" class="btn secondary" aria-pressed="false">All projects</button>
                 <button id="saved-projects" class="btn secondary" aria-pressed="false">Saved projects</button>
             </div>
+            <button type="button" id="clear-project-filters" class="text-link" hidden>Clear filters</button>
             <p id="project-result-count" class="result-count" role="status" aria-live="polite"></p>
             <div id="project-results" class="project-results" hidden></div>
             <div id="projects-grid" class="projects-grid"></div>
@@ -161,6 +175,14 @@
         </div>
     </section>
 
+    <section id="services" class="collaborate-section"><div class="container"><div class="section-header"><span class="label">Let's work together</span><h2>Your next idea. <span>Our starting point.</span></h2><p>A clear conversation is the first step to useful work.</p></div>
+        <div class="collaborate-grid">
+            <article><span class="service-symbol" aria-hidden="true">01 /</span><h3>Make sense of your data</h3><p>Let's discuss the questions you want to answer, the data you have, and what better decisions would look like.</p><a href="#contact" data-inquiry-service="data">Discuss a data project &rarr;</a></article>
+            <article><span class="service-symbol" aria-hidden="true">02 /</span><h3>Bring a digital idea to life</h3><p>From a website to an application, let's define an experience that works for your users and your goals.</p><a href="#contact" data-inquiry-service="web">Discuss a web project &rarr;</a></article>
+            <article><span class="service-symbol" aria-hidden="true">03 /</span><h3>Find the right collaboration</h3><p>Have an opportunity, a role, or an idea that doesn't fit a box? I'd like to hear more.</p><a href="#contact" data-inquiry-service="opportunity">Start a conversation &rarr;</a></article>
+        </div>
+        <div class="working-process"><span>HOW WE START</span><p><b>01</b> Share the challenge</p><p><b>02</b> Define the scope</p><p><b>03</b> Agree on next steps</p></div>
+    </div></section>
     <section id="contact">
         <div class="container">
             <div class="section-header">
@@ -188,7 +210,7 @@
                 </div>
 
                 <div class="contact-form-wrapper">
-                    <h3>Send a Message</h3>
+                    <span class="eyebrow">HAVE SOMETHING IN MIND?</span><h3>Let's make a start.</h3>
                     <div class="contact-mode">
                         <button class="active" data-mode="out">Send a message</button>
                         <button data-mode="in">Website chat</button>
@@ -196,7 +218,7 @@
 
                     <div id="out-conversation" class="conversation-mode">
                         <div class="conversation-mode-desc">
-                            <i class="fas fa-info-circle"></i> 
+                            <i class="fas fa-info-circle"></i>
                             Send me a message and choose how you would like me to reply.
                         </div>
                         <div class="channel-select">
@@ -205,26 +227,30 @@
                             <button data-channel="phone">Phone</button>
                         </div>
                         <form id="out-form" class="contact-form">
+                            <p id="inquiry-context" class="inquiry-context" hidden></p>
+                            <div class="form-group"><label for="inquiry-service">What would you like to discuss?</label><select id="inquiry-service"><option value="general">A conversation</option><option value="data">A data project</option><option value="web">A website or application</option><option value="opportunity">A role or collaboration</option></select></div>
+                            <div class="inquiry-details"><div class="form-group"><label for="inquiry-timeline">Timeline (optional)</label><select id="inquiry-timeline"><option value="">Let's discuss</option><option>As soon as possible</option><option>Within 1 month</option><option>Within 3 months</option><option>Just exploring</option></select></div><div class="form-group"><label for="inquiry-budget">Budget (optional)</label><input id="inquiry-budget" placeholder="Your range and currency" maxlength="100"></div></div>
                             <div class="form-group">
                                 <label for="out-name"><i class="fas fa-user"></i> Your Name</label>
-                                <input type="text" id="out-name" placeholder="Enter your name" required>
+                                <input type="text" autocomplete="name" maxlength="100" id="out-name" placeholder="Enter your name" required>
                             </div>
                             <div class="form-group">
                                 <label for="out-email"><i class="fas fa-envelope"></i> Your Email</label>
-                                <input type="email" id="out-email" placeholder="Enter your email" required>
+                                <input type="email" autocomplete="email" maxlength="254" id="out-email" placeholder="Enter your email" required>
                             </div>
                             <div class="form-group"><label for="out-reply-contact">Phone or WhatsApp number (optional)</label><input type="tel" id="out-reply-contact" autocomplete="tel" placeholder="Your number, if you prefer a call or WhatsApp"></div>
                             <div class="form-group">
                                 <label for="out-message"><i class="fas fa-comment"></i> Your Message</label>
-                                <textarea id="out-message" rows="4" placeholder="Tell me about your project..." required></textarea>
+                                <textarea maxlength="9000" id="out-message" rows="4" placeholder="Tell me about your project..." required></textarea>
                             </div>
-                            <button type="submit" class="btn primary"><i class="fas fa-paper-plane"></i> Send message</button>
+                            <p id="inquiry-feedback" class="inquiry-feedback" role="status" aria-live="polite"></p>
+                            <button type="submit" class="btn primary"><i class="fas fa-paper-plane"></i> Send project inquiry</button>
                         </form>
                     </div>
 
                     <div id="in-conversation" class="conversation-mode" style="display:none;">
                         <div class="conversation-mode-desc">
-                            <i class="fas fa-comment-dots"></i> 
+                            <i class="fas fa-comment-dots"></i>
                             Chat with me directly on this website. You'll need to <strong>create an account</strong> (or log in) to send messages here.
                         </div>
                         <div id="chat-container" class="chat-container">
@@ -245,6 +271,7 @@
         </div>
     </section>
 
+    <dialog id="quick-nav" class="quick-nav-dialog" aria-labelledby="quick-nav-title"><div class="credential-toolbar"><h2 id="quick-nav-title">Where would you like to go?</h2><button type="button" class="btn secondary" id="close-quick-nav">Close</button></div><p>Explore the app, or jump straight to a conversation.</p><div class="quick-nav-links"><a href="#projects">Explore projects <span>01</span></a><a href="#certifications">Certificates &amp; credentials <span>02</span></a><a href="#about">About me <span>03</span></a><a href="#experience">Experience &amp; background <span>04</span></a><a href="#contact">Discuss a project <span>05</span></a></div></dialog>
     <div id="authModal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
         <div class="auth-modal-content">
             <button class="close-modal" id="closeAuthModal">&times;</button>
@@ -301,6 +328,7 @@
         </div>
     </footer>
 
+    <script src="js/config.js"></script>
     <script src="js/api.js"></script>
     <script src="js/credentials.js"></script>
     <script src="js/app.js"></script>

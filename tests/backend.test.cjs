@@ -22,7 +22,7 @@ function harness(query = async () => ({ rows: [], rowCount: 0 })) {
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8'), {
         require: customRequire, module,
-        process: { env: { JWT_SECRET: 'isolated-test-secret', CORS_ORIGINS: ' https://preview.example.com ' } },
+        process: { env: { JWT_SECRET: 'isolated-test-secret', CORS_ORIGINS: ' https://preview.example.com ', FRONTEND_URL: 'https://new-portfolio.vercel.app/' } },
         console: { log() {}, error() {}, warn() {} },
         Buffer
     });
@@ -39,7 +39,7 @@ const adminHeaders = { 'Content-Type': 'application/json', Authorization: `Beare
 test('Vercel origin and configured origins can reach the API', async () => {
     const { app } = harness();
     await serve(app, async base => {
-        for (const origin of ['https://portfolio-cms-seven-blush.vercel.app', 'https://preview.example.com']) {
+        for (const origin of ['https://new-portfolio.vercel.app', 'https://preview.example.com']) {
             const response = await fetch(base + '/api/test', { headers: { Origin: origin } });
             assert.equal(response.status, 200);
             assert.equal(response.headers.get('access-control-allow-origin'), origin);
@@ -54,6 +54,7 @@ test('a visitor token cannot access admin routes or run setup', async () => {
         const token = jwt.sign({ id: 1, type: 'visitor' }, 'isolated-test-secret');
         const headers = { Authorization: `Bearer ${token}` };
         assert.equal((await fetch(base + '/api/messages', { headers })).status, 403);
+        assert.equal((await fetch(base + '/api/admin/overview', { headers })).status, 403);
         assert.equal((await fetch(base + '/api/setup-db', { headers })).status, 403);
         assert.equal((await fetch(base + '/api/setup-db')).status, 401);
         assert.equal(queries.length, 0);
@@ -95,5 +96,14 @@ test('health reports database failures and contact rejects invalid content', asy
         assert.equal((await fetch(base + '/api/health')).status, 503);
         const response = await fetch(base + '/api/contact-out', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: ' ', email: 'invalid', message: ' ', channel: 'email' }) });
         assert.equal(response.status, 400);
+    });
+});
+test('owner overview returns authenticated inquiry and content totals', async () => {
+    const overview = { inquiries: 3, conversations: 2, credential_files: 1, projects: 4, about_paragraphs: 2, profile_ready: true };
+    const { app } = harness(async () => ({ rows: [overview], rowCount: 1 }));
+    await serve(app, async base => {
+        const response = await fetch(base + '/api/admin/overview', { headers: adminHeaders });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { success: true, overview });
     });
 });
