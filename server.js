@@ -1,6 +1,7 @@
 const express = require('express');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const { randomUUID } = require('node:crypto');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
@@ -1092,13 +1093,23 @@ app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
 // UPLOAD ENDPOINTS
 // ============================================
 
+async function uploadCloudinaryFile(file) {
+    const isImage = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
+    const resourceType = isImage ? 'image' : /^(video|audio)\//.test(file.mimetype) ? 'video' : 'raw';
+    const options = { folder: 'portfolio-media', resource_type: resourceType };
+    if (resourceType === 'raw') {
+        const name = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120);
+        options.public_id = `${randomUUID()}-${name}`;
+    }
+    const source = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return cloudinary.uploader.upload(source, options);
+}
+
 // Upload single file
 app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file' });
-        const b64 = req.file.buffer.toString('base64');
-        const dataUri = `data:${req.file.mimetype};base64,${b64}`;
-        const result = await cloudinary.uploader.upload(dataUri, { folder: 'portfolio-projects', resource_type: 'auto' });
+        const result = await uploadCloudinaryFile(req.file);
         res.json({ success: true, url: result.secure_url });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1110,9 +1121,7 @@ app.post('/api/upload-multiple', authenticateToken, upload.array('images', 10), 
     try {
         if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files' });
         const urls = await Promise.all(req.files.map(async file => {
-            const b64 = file.buffer.toString('base64');
-            const dataUri = `data:${file.mimetype};base64,${b64}`;
-            const result = await cloudinary.uploader.upload(dataUri, { folder: 'portfolio-projects', resource_type: 'auto' });
+            const result = await uploadCloudinaryFile(file);
             return result.secure_url;
         }));
         res.json({ success: true, urls, count: urls.length });

@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 // Real Express routing and JWT verification, with an isolated fake database.
 function harness(query = async () => ({ rows: [], rowCount: 0 })) {
     const queries = [];
+    const uploads = [];
     let released = false;
     class Pool {
         async query(sql, params) { queries.push({ sql, params }); return query(sql, params); }
@@ -17,7 +18,7 @@ function harness(query = async () => ({ rows: [], rowCount: 0 })) {
     const customRequire = name => {
         if (name === 'pg') return { Pool };
         if (name === 'dotenv') return { config() {} };
-        if (name === 'cloudinary') return { v2: { config() {} } };
+        if (name === 'cloudinary') return { v2: { config() {}, uploader: { async upload(source, options) { uploads.push({ source, options }); return { secure_url: 'https://res.cloudinary.com/test/' + options.resource_type + '/upload/example' }; } } } };
         return require(name);
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8'), {
@@ -26,7 +27,7 @@ function harness(query = async () => ({ rows: [], rowCount: 0 })) {
         console: { log() {}, error() {}, warn() {} },
         Buffer
     });
-    return { ...module.exports, queries, released: () => released };
+    return { ...module.exports, queries, uploads, released: () => released };
 }
 async function serve(app, work) {
     const server = app.listen(0, '127.0.0.1');
@@ -105,5 +106,23 @@ test('owner overview returns authenticated inquiry and content totals', async ()
         const response = await fetch(base + '/api/admin/overview', { headers: adminHeaders });
         assert.equal(response.status, 200);
         assert.deepEqual(await response.json(), { success: true, overview });
+    });
+});
+
+test('authenticated media uploads go to Cloudinary without storing file bytes in PostgreSQL', async () => {
+    const { app, queries, uploads } = harness();
+    const token = jwt.sign({ id: 7 }, 'isolated-test-secret');
+    await serve(app, async base => {
+        for (const [name, type, resource] of [['certificate.pdf', 'application/pdf', 'image'], ['notes.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'raw'], ['intro.mp4', 'video/mp4', 'video']]) {
+            const form = new FormData();
+            form.append('image', new Blob(['isolated test file'], { type }), name);
+            const response = await fetch(base + '/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+            assert.equal(response.status, 200);
+            assert.ok((await response.json()).url.startsWith('https://res.cloudinary.com/'));
+            assert.equal(uploads.at(-1).options.resource_type, resource);
+            if (resource === 'raw') assert.ok(uploads.at(-1).options.public_id.endsWith('-notes.docx'));
+        }
+        assert.equal(queries.length, 0);
+        assert.equal((await fetch(base + '/api/upload', { method: 'POST' })).status, 401);
     });
 });

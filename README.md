@@ -2,6 +2,8 @@
 
 A workspace for discovering projects, viewing actual credentials, saving interesting work, and starting a project conversation. Built with HTML, CSS, JavaScript, Express, PostgreSQL, and Cloudinary.
 
+Media uploads live in **Cloudinary**. All structured content, accounts, inquiries, conversations, and media URLs live in **Neon PostgreSQL**.
+
 The public app includes recent project highlights, search, category filters, sorting, saved projects, shareable project screens, photos and videos, case study text, downloadable attachments, image/PDF credential viewing, quick navigation, dark mode, and installation support.
 
 Visitors can submit structured project inquiries or register for website chat. The owner workspace manages content, credentials, uploads, resumes, inquiries, and conversations, with a readiness checklist and inquiry counts.

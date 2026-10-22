@@ -2,6 +2,14 @@
 
 Build locally first, then create the two deployments from this repository. Neither service depends on the previous deployment URLs.
 
+## Storage
+
+- **Cloudinary** stores uploaded photos, videos, certificates, resumes, and project documents.
+- **Neon PostgreSQL** stores profiles, skills, project descriptions, credentials, accounts, inquiries, chat messages, media URLs, and file metadata.
+- New uploads are sent to Cloudinary through the authenticated Render backend. The frontend saves returned URLs to Neon. Older embedded files remain readable; this change does not automatically migrate them.
+- Use the Neon connection string (including its SSL settings) as Render's `DATABASE_URL`.
+- For public PDF certificate/resume delivery, ensure your Cloudinary account permits PDF delivery under its Security settings.
+
 ## 1. Deploy the backend on Render
 
 Create a **Web Service** with the Node runtime from the repository root. The included `render.yaml` Blueprint is another way to configure it.
@@ -16,7 +24,7 @@ Create a **Web Service** with the Node runtime from the repository root. The inc
 Import your private backend `.env` values into Render. Required values:
 
 ```dotenv
-DATABASE_URL=your-existing-PostgreSQL-connection-string
+DATABASE_URL=your-Neon-PostgreSQL-connection-string-with-sslmode=require
 JWT_SECRET=your-long-random-signing-secret
 CLOUD_NAME=your-cloudinary-cloud
 API_KEY=your-cloudinary-key
@@ -99,3 +107,5 @@ Check these after configuring both new deployments:
 The app is installable on supporting browsers. Its service worker caches only the public shell; portfolio data and chat need a connection. Saved projects stay in that visitor's browser. Inquiries are stored for you to read and reply; there is no automatic email, phone, or WhatsApp delivery service.
 
 Platform references: [Vercel environment variables](https://vercel.com/docs/environment-variables) and [Render Blueprints](https://render.com/docs/blueprint-spec).
+
+Storage references: [Neon Node.js connections](https://neon.com/docs/guides/node) and [Cloudinary upload options](https://cloudinary.com/documentation/upload_parameters).

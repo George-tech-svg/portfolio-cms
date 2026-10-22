@@ -38,6 +38,19 @@ function getFileUploadHeaders() {
     };
 }
 
+// All new media is uploaded through the authenticated backend to Cloudinary.
+// PostgreSQL receives the returned URL and descriptive metadata only.
+async function uploadMedia(file) {
+    const form = new FormData();
+    form.append('image', file);
+    const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
+        method: 'POST', headers: getFileUploadHeaders(), body: form
+    });
+    const result = await response.json();
+    if (!result.success || !result.url) throw new Error(result.error || 'Media upload failed.');
+    return result.url;
+}
+
 // ============================================
 // INITIALIZE
 // ============================================
@@ -989,14 +1002,9 @@ document.getElementById('projectForm').addEventListener('submit', async function
         if ([...fileInput.files].reduce((total, file) => total + file.size, 0) > 25 * 1024 * 1024) throw new Error('Project attachments must total 25 MB or less.');
         const files = [];
         if (fileInput.files.length > 0) {
-            for (let f of fileInput.files) {
-                const reader = new FileReader();
-                const data = await new Promise((resolve, reject) => {
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = () => reject(new Error('Unable to read attachment: ' + f.name));
-                reader.readAsDataURL(f);
-                });
-                files.push({ name: f.name, data, size: f.size, type: f.type });
+            for (const file of fileInput.files) {
+                const url = await uploadMedia(file);
+                files.push({ name: file.name, data: url, size: file.size, type: file.type });
             }
         }
 
@@ -1359,12 +1367,7 @@ document.getElementById('certificationForm').addEventListener('submit', async fu
                 throw new Error('Choose a JPG, PNG, WebP image or PDF.');
             }
             if (selected.size > 10 * 1024 * 1024) throw new Error('Certificate files must be 10 MB or smaller.');
-            fileData = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => reject(new Error('Unable to read the certificate file. Please select it again.'));
-                reader.readAsDataURL(selected);
-            });
+            fileData = await uploadMedia(selected);
         } else if (editId) {
             fileData = portfolioData.certifications.find(c => c.id == editId)?.file || null;
         }
@@ -1530,22 +1533,20 @@ function renderResumePreview() {
     }
 }
 
-document.getElementById('resumeForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('resumeFile');
-    if (fileInput.files.length === 0) {
-        alert('Please select a PDF file.');
-        return;
-    }
-    const reader = new FileReader();
-    const fileData = await new Promise((resolve) => {
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(fileInput.files[0]);
-    });
-    portfolioData.personal.resume = fileData;
-    try { await saveData(['profile']); } catch (error) { alert('Failed to save: ' + error.message); return; }
-    renderResumePreview();
-    alert('✅ Resume uploaded!');
+document.getElementById('resumeForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const file = document.getElementById('resumeFile').files[0];
+    if (!file) { alert('Please select a PDF file.'); return; }
+    if (file.type !== 'application/pdf' || file.size > 10 * 1024 * 1024) { alert('Choose a PDF up to 10 MB.'); return; }
+    const submit = this.querySelector('[type=submit]');
+    submit.disabled = true;
+    try {
+        portfolioData.personal.resume = await uploadMedia(file);
+        await saveData(['profile']);
+        renderResumePreview();
+        alert('Resume uploaded to Cloudinary and saved!');
+    } catch (error) { alert('Failed to save resume: ' + error.message); }
+    finally { submit.disabled = false; }
 });
 
 // ============================================

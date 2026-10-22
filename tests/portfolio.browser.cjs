@@ -30,6 +30,7 @@ localStorage.setItem('token', 'local-test-token');
 window.fixture = ${JSON.stringify(fixture)};
 window.failFetch = false;
 window.saveRequests = [];
+window.uploadRequests = [];
 window.alerts = [];
 window.alert = message => window.alerts.push(message);
 window.browserErrors = [];
@@ -38,6 +39,11 @@ window.addEventListener('unhandledrejection', event => window.browserErrors.push
 window.chatMessages = [];
 window.fetch = async (url, options = {}) => {
     if (window.failFetch) throw new Error('Simulated offline');
+    if (url.endsWith('/api/upload')) {
+        const file = options.body.get('image');
+        window.uploadRequests.push(file.name);
+        return { ok: true, status: 200, json: async () => ({ success: true, url: 'https://res.cloudinary.com/test/image/upload/' + file.name }) };
+    }
     if (url.endsWith('/api/visitor-login') || url.endsWith('/api/visitor-register')) {
         return { ok: true, status: 200, json: async () => ({ success: true, token: 'test-visitor', username: 'Visitor' }) };
     }
@@ -81,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         window.rejectSave = false;
         form.dispatchEvent(new Event('submit', { cancelable: true }));
         await new Promise(resolve => setTimeout(resolve, 150));
-        check(window.saveRequests.at(-1)?.file.startsWith('data:image/png;base64,'), 'Image upload is included in saved credential');
+        check(window.saveRequests.at(-1)?.file.startsWith('https://res.cloudinary.com/'), 'Saved credential contains its Cloudinary URL');
         check(window.alerts.at(-1) === 'Certification saved!', 'Successful save is confirmed');
         showAddCertification();
         check(document.getElementById('certFile').files.length === 0, 'New credential cannot reuse the previous upload');
@@ -92,8 +98,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
         await new Promise(resolve => setTimeout(resolve, 150));
         check(window.saveRequests.at(-1)?.files.length === 2, 'Adding an attachment preserves the existing files');
+        check(window.saveRequests.at(-1)?.files[1].data.startsWith('https://res.cloudinary.com/'), 'New attachment stores a Cloudinary URL');
         showAddProject(1);
         check(document.getElementById('projectFiles').files.length === 0, 'New projects clear previous attachments');
+        const resume = new DataTransfer(); resume.items.add(new File(['test PDF'], 'resume.pdf', { type: 'application/pdf' }));
+        document.getElementById('resumeFile').files = resume.files;
+        document.getElementById('resumeForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 150));
+        check(window.saveRequests.at(-1)?.resume === 'https://res.cloudinary.com/test/image/upload/resume.pdf', 'Resume stores its Cloudinary URL');
+        check(window.uploadRequests.includes('certificate.png') && window.uploadRequests.includes('notes.txt') && window.uploadRequests.includes('resume.pdf'), 'Certificates, attachments, and resumes all upload to Cloudinary');
     } catch (error) { failures.push(error.stack); }
     failures.push(...window.browserErrors);
     const result = document.createElement('pre');
