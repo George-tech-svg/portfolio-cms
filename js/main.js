@@ -261,7 +261,7 @@ function renderProjectGroups(data) {
         const groupId = group.id || index;
         return `
         <div class="project-card group-card" role="button" tabindex="0" onclick="showGroup('${groupId}')" style="cursor:pointer;">
-            <div class="project-image" style="display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);min-height:200px;">
+            <div class="project-image category-cover">
                 <i class="${Credentials.escape(group.icon || 'fas fa-folder')}" style="font-size:4rem;color:white;opacity:0.9;"></i>
             </div>
             <div class="project-content">
@@ -367,11 +367,15 @@ function renderCertifications(data) {
             card.append(button);
         }
         const content = document.createElement('div');
+        content.className = 'credential-content';
         content.innerHTML = `
             <h3>${Credentials.escape(cert.name)}</h3>
             <div class="cert-issuer">${Credentials.escape(cert.issuer)}</div>
-            <div class="cert-date">${Credentials.escape(cert.date)}</div>
-            <p class="cert-description">${Credentials.escape(cert.description)}</p>
+            ${cert.date ? `<div class="cert-date">${Credentials.escape(cert.date)}</div>` : ''}
+            ${cert.description?.trim() ? `<details class="credential-description">
+                <summary><span class="description-more">More</span><span class="description-less">Less</span><span class="description-chevron" aria-hidden="true">⌄</span><span class="sr-only"> about ${Credentials.escape(cert.name || 'this credential')}</span></summary>
+                <p class="cert-description">${Credentials.escape(cert.description)}</p>
+            </details>` : ''}
             <div class="cert-actions"></div>`;
         const actions = content.querySelector('.cert-actions');
         if (file) {

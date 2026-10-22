@@ -39,7 +39,16 @@ window.Credentials = (() => {
             });
             frame.append(image);
         } else {
-            frame.textContent = kind(source) === 'pdf' ? 'PDF credential · Open to read the full document' : 'Credential document · Open to view';
+            frame.classList.add('credential-document');
+            const symbol = document.createElement('span');
+            symbol.className = 'credential-file-symbol';
+            symbol.textContent = kind(source) === 'pdf' ? 'PDF' : 'DOC';
+            const label = document.createElement('strong');
+            label.textContent = kind(source) === 'pdf' ? 'A closer look at the credential' : 'Explore the original document';
+            const hint = document.createElement('span');
+            hint.className = 'credential-file-hint';
+            hint.textContent = 'Open to view the full document';
+            frame.append(symbol, label, hint);
         }
         return frame;
     }

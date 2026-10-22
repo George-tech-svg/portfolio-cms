@@ -19,7 +19,7 @@ const fixture = {
     personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist' },
     projectGroups: [{ id: 1, name: 'Data science', projects: [{ id: 2, title: 'Sample project', images: [image], readme: 'Project explanation', files: [{ name: 'existing.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' }] }] }],
     certifications: [
-        { id: 1, name: 'Image certificate', issuer: 'Test issuer', file: image, link: 'https://example.com/verify' },
+        { id: 1, name: 'Image certificate', issuer: 'Test issuer', description: 'Practical skills in data analysis, research, and building useful applications. <script>inert text</script>', file: image, link: 'https://example.com/verify' },
         { id: 2, name: 'PDF certificate', file: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' },
         { id: 3, name: '<img src=x onerror=alert(1)>', link: 'javascript:alert(1)' }
     ]
@@ -27,7 +27,7 @@ const fixture = {
 const setup = `<script>
 localStorage.clear();
 localStorage.setItem('token', 'local-test-token');
-window.fixture = ${JSON.stringify(fixture)};
+window.fixture = ${JSON.stringify(fixture).replace(/</g, '\\u003c')};
 window.failFetch = false;
 window.saveRequests = [];
 window.uploadRequests = [];
@@ -124,6 +124,16 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         check(document.querySelectorAll('.certification-card').length === 3, 'All credentials render');
         check(document.querySelector('.credential-preview img')?.src.startsWith('data:image/png'), 'Actual uploaded photo renders');
         check(document.querySelectorAll('.certification-card')[2].querySelectorAll('img, a').length === 0, 'Untrusted credential text and URL remain inert');
+        const description = document.querySelector('.credential-description');
+        check(description && !description.open && !description.querySelector('p').checkVisibility(), 'Certificate descriptions start collapsed');
+        check(document.querySelectorAll('.credential-description').length === 1, 'Empty descriptions do not add More controls');
+        const more = description.querySelector('summary');
+        more.focus(); more.click();
+        check(description.open && description.querySelector('p').getClientRects().length > 0, 'More reveals the full certificate description');
+        check(!description.querySelector('script') && description.querySelector('p').textContent === window.fixture.certifications[0].description, 'Description text remains safe');
+        check(getComputedStyle(description.querySelector('.description-less')).display !== 'none', 'Expanded description displays Less');
+        more.click();
+        check(!description.open && !document.querySelector('.credential-dialog'), 'Less collapses without opening the document viewer');
         document.querySelector('.credential-thumbnail').click();
         check(document.querySelector('.credential-dialog')?.open && document.querySelector('.credential-dialog img'), 'Image viewer opens');
         document.querySelector('.credential-dialog button').click();
@@ -207,6 +217,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
         check(document.querySelector('.hero-content').getBoundingClientRect().right <= innerWidth + 1, 'Hero stays within the mobile viewport');
         check(document.querySelector('.nav-actions').getBoundingClientRect().right <= innerWidth + 1, 'Header actions stay within the mobile viewport');
+        document.getElementById('theme-toggle').click();
+        check(document.body.classList.contains('dark'), 'Dark theme can be enabled');
+        document.getElementById('theme-toggle').click();
+        check(!document.body.classList.contains('dark'), 'Light theme can be restored');
+        if (${JSON.stringify(process.env.PORTFOLIO_TEST_DARK === '1')}) document.getElementById('theme-toggle').click();
+        if (${JSON.stringify(process.env.PORTFOLIO_TEST_SECTION || '')}) {
+            document.getElementById(${JSON.stringify(process.env.PORTFOLIO_TEST_SECTION || 'hero')}).scrollIntoView({ behavior: 'instant' });
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     } catch (error) { failures.push(error.stack); }
     failures.push(...window.browserErrors);
     const result = document.createElement('pre');
@@ -224,14 +243,16 @@ const server = http.createServer((req, res) => {
         res.writeHead(404).end(); return;
     }
     let body = fs.readFileSync(file);
-    if (file.endsWith(adminMode ? 'admin.html' : 'index.html')) body = body.toString().replace('<head>', '<head>' + setup).replace('</body>', (adminMode ? adminChecks : checks) + '</body>');
+    if (file.endsWith(adminMode ? 'admin.html' : 'index.html')) body = body.toString()
+        .replace(/<link\b[^>]*href="https:\/\/[^\"]*"[^>]*>/g, '')
+        .replace('<head>', '<head>' + setup).replace('</body>', (adminMode ? adminChecks : checks) + '</body>');
     res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');
     res.end(body);
 });
 server.listen(0, '127.0.0.1', () => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-browser-'));
     execFile(browser, [
-        '--headless=new', '--force-device-scale-factor=1', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+        '--headless=new', '--force-device-scale-factor=1', '--disable-gpu', '--run-all-compositor-stages-before-draw', '--no-first-run', '--no-default-browser-check',
         '--disable-background-networking', '--window-size=' + (process.env.PORTFOLIO_TEST_WIDTH || '390') + ',844', '--hide-scrollbars',
         '--virtual-time-budget=11000', '--dump-dom', '--user-data-dir=' + profile,
         ...(process.env.PORTFOLIO_TEST_SCREENSHOT ? ['--screenshot=' + path.resolve(process.env.PORTFOLIO_TEST_SCREENSHOT)] : []),
