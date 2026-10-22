@@ -4,7 +4,7 @@
 
 console.log('✅ main.js loaded (API version)');
 
-const API_BASE = 'https://portfolio-cms-k2at.onrender.com';
+const API_BASE = window.PortfolioAPI.baseURL;
 let portfolioData = {};
 let currentGroup = null;
 let currentProject = null;
@@ -14,6 +14,8 @@ let visitorToken = localStorage.getItem('visitorToken');
 let currentConversationId = null;
 let chatPollInterval = null;
 let authMode = 'login';
+let publicUIReady = false;
+let chatLoading = false;
 
 // ============================================
 // LOAD PUBLIC DATA
@@ -23,8 +25,12 @@ async function loadPublicData() {
     console.log('🔍 Starting to load data...');
     console.log('API_BASE:', API_BASE);
     
+    const status = document.getElementById('load-status');
+    status.hidden = false;
+    status.textContent = 'Loading portfolio...';
+    document.getElementById('projects-grid')?.setAttribute('aria-busy', 'true');
     try {
-        const response = await fetch(`${API_BASE}/api/data`);
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/data`);
         console.log('Response status:', response.status);
         
         if (!response.ok) {
@@ -36,26 +42,26 @@ async function loadPublicData() {
         console.log('✅ Data loaded successfully');
         
         renderPublicPortfolio();
-        initContactModes();
-        initChat();
-        initAuthModal();
+        restoreProjectRoute();
+        if (!publicUIReady) {
+            initContactModes();
+            initChat();
+            initAuthModal();
+            publicUIReady = true;
+        }
+        status.hidden = true;
+        document.getElementById('projects-grid')?.setAttribute('aria-busy', 'false');
+        console.log('Portfolio rendered successfully');
     } catch (error) {
         console.error('❌ Error loading data:', error);
         
-        // Show error message on page
-        const heroTitle = document.getElementById('hero-title');
-        if (heroTitle) {
-            heroTitle.innerHTML = `Hi, I'm <span>Error Loading</span>`;
-        }
-        
-        const projectsGrid = document.getElementById('projects-grid');
-        if (projectsGrid) {
-            projectsGrid.innerHTML = `
-                <p style="color:var(--text-secondary);text-align:center;width:100%;padding:2rem;">
-                    ❌ Error loading data: ${error.message}
-                </p>
-            `;
-        }
+        document.getElementById('projects-grid')?.setAttribute('aria-busy', 'false');
+        status.textContent = 'Unable to load the portfolio. Please try again. ';
+        const retry = document.createElement('button');
+        retry.textContent = 'Retry';
+        retry.className = 'btn secondary';
+        retry.addEventListener('click', loadPublicData, { once: true });
+        status.append(retry);
     }
 }
 
@@ -71,7 +77,7 @@ function renderPublicPortfolio() {
     if (data.personal) {
         const heroTitle = document.getElementById('hero-title');
         if (heroTitle) {
-            heroTitle.innerHTML = `Hi, I'm <span>${data.personal.name || 'Your Name'}</span>`;
+            heroTitle.innerHTML = `Hi, I'm <span>${Credentials.escape(data.personal.name || 'Your Name')}</span>`;
         }
         
         const heroSubtitle = document.getElementById('hero-subtitle');
@@ -86,7 +92,7 @@ function renderPublicPortfolio() {
         
         const logo = document.getElementById('logo');
         if (logo) {
-            logo.innerHTML = (data.personal.name || 'Dev').split(' ')[0] + '<span>.</span>';
+            logo.innerHTML = Credentials.escape((data.personal.name || 'Dev').split(' ')[0]) + '<span>.</span>';
         }
         
         // Profile image
@@ -111,7 +117,10 @@ function renderPublicPortfolio() {
         if (data.personal.resume) {
             document.querySelectorAll('#resume-link, #resume-btn').forEach(link => {
                 if (link) {
-                    link.href = data.personal.resume;
+                    const resume = Credentials.url(data.personal.resume, true);
+                    if (!resume) return;
+                    link.href = resume;
+                    link.download = 'George-Ochieng-Resume.pdf';
                     link.style.display = 'flex';
                 }
             });
@@ -169,11 +178,17 @@ function renderPublicPortfolio() {
 
     // --- Social Links ---
     renderSocialLinks(data);
+    PortfolioApp.setData(data);
+    document.getElementById('welcome-message').textContent = data.personal?.welcomeMessage || '';
+    const welcome = document.getElementById('welcome-video');
+    const welcomeURL = Credentials.mediaURL(data.videos?.welcome);
+    welcome.hidden = !welcomeURL;
+    if (welcomeURL) welcome.src = welcomeURL;
 
     // --- Footer ---
     if (data.footer) {
         const footerText = document.getElementById('footer-text');
-        if (footerText) footerText.innerHTML = data.footer;
+        if (footerText) footerText.textContent = data.footer;
     }
 }
 
@@ -191,10 +206,10 @@ function renderSkills(data) {
             const div = document.createElement('div');
             div.className = 'skill-card';
             div.innerHTML = `
-                <div class="skill-icon"><i class="${skill.icon || 'fas fa-code'}"></i></div>
-                <h3>${skill.category}</h3>
+                <div class="skill-icon"><i class="${Credentials.escape(skill.icon || 'fas fa-code')}"></i></div>
+                <h3>${Credentials.escape(skill.category)}</h3>
                 <div class="skill-tags">
-                    ${skill.items ? skill.items.map(item => `<span class="skill-tag">${item}</span>`).join('') : ''}
+                    ${skill.items ? skill.items.map(item => `<span class="skill-tag">${Credentials.escape(item)}</span>`).join('') : ''}
                 </div>
             `;
             grid.appendChild(div);
@@ -246,14 +261,14 @@ function renderProjectGroups(data) {
     container.innerHTML = groups.map((group, index) => {
         const groupId = group.id || index;
         return `
-        <div class="project-card group-card" onclick="showGroup('${groupId}')" style="cursor:pointer;">
+        <div class="project-card group-card" role="button" tabindex="0" onclick="showGroup('${groupId}')" style="cursor:pointer;">
             <div class="project-image" style="display:flex;align-items:center;justify-content:center;background:var(--accent-gradient);min-height:200px;">
-                <i class="${group.icon || 'fas fa-folder'}" style="font-size:4rem;color:white;opacity:0.9;"></i>
+                <i class="${Credentials.escape(group.icon || 'fas fa-folder')}" style="font-size:4rem;color:white;opacity:0.9;"></i>
             </div>
             <div class="project-content">
                 <span class="project-tag">${group.projects?.length || 0} Projects</span>
-                <h3>${group.name}</h3>
-                <p>${group.description || 'Click to view projects in this category'}</p>
+                <h3>${Credentials.escape(group.name)}</h3>
+                <p>${Credentials.escape(group.description || 'Click to view projects in this category')}</p>
                 <div style="margin-top:1rem;color:var(--accent-primary);font-weight:600;">
                     View Projects <i class="fas fa-arrow-right"></i>
                 </div>
@@ -276,10 +291,10 @@ function renderExperience(data) {
             const div = document.createElement('div');
             div.className = 'timeline-item';
             div.innerHTML = `
-                <h3>${exp.role}</h3>
-                <div class="company">${exp.company}</div>
-                <div class="period">${exp.period}</div>
-                <p>${exp.description}</p>
+                <h3>${Credentials.escape(exp.role)}</h3>
+                <div class="company">${Credentials.escape(exp.company)}</div>
+                <div class="period">${Credentials.escape(exp.period)}</div>
+                <p>${Credentials.escape(exp.description)}</p>
             `;
             timeline.appendChild(div);
         });
@@ -307,11 +322,11 @@ function renderEducation(data) {
             div.className = 'education-card';
             div.innerHTML = `
                 <div class="edu-icon"><i class="fas fa-graduation-cap"></i></div>
-                <h3>${edu.institution}</h3>
-                <div class="edu-degree">${edu.degree}</div>
-                ${edu.field ? `<div class="edu-field">${edu.field}</div>` : ''}
-                <div class="edu-period">${edu.period || ''}</div>
-                ${edu.description ? `<div class="edu-description">${edu.description}</div>` : ''}
+                <h3>${Credentials.escape(edu.institution)}</h3>
+                <div class="edu-degree">${Credentials.escape(edu.degree)}</div>
+                ${edu.field ? `<div class="edu-field">${Credentials.escape(edu.field)}</div>` : ''}
+                <div class="edu-period">${Credentials.escape(edu.period || '')}</div>
+                ${edu.description ? `<div class="edu-description">${Credentials.escape(edu.description)}</div>` : ''}
             `;
             grid.appendChild(div);
         });
@@ -332,28 +347,102 @@ function renderCertifications(data) {
     const grid = document.getElementById('certifications-list');
     if (!grid) return;
 
-    if (data.certifications && data.certifications.length > 0) {
-        grid.innerHTML = '';
-        data.certifications.forEach(cert => {
-            const div = document.createElement('div');
-            div.className = 'certification-card';
-            div.innerHTML = `
-                <div class="cert-icon"><i class="fas fa-certificate"></i></div>
-                <h3>${cert.name}</h3>
-                <div class="cert-issuer">${cert.issuer}</div>
-                <div class="cert-date">${cert.date || ''}</div>
-                ${cert.description ? `<div class="cert-description">${cert.description}</div>` : ''}
-                ${cert.link ? `<a href="${cert.link}" target="_blank" class="btn-verify"><i class="fas fa-external-link-alt"></i> Verify</a>` : ''}
-            `;
-            grid.appendChild(div);
-        });
-    } else {
-        grid.innerHTML = `
-            <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
-                No certifications added yet.
-            </div>
-        `;
+    grid.replaceChildren();
+    const certificates = data.certifications || [];
+    if (!certificates.length) {
+        grid.textContent = 'Credentials will be shared here soon.';
+        return;
     }
+    certificates.forEach(cert => {
+        const card = document.createElement('article');
+        card.className = 'certification-card';
+        const file = Credentials.url(cert.file, true);
+        const verify = Credentials.url(cert.link);
+        const preview = Credentials.preview(file, cert.name);
+        if (preview) {
+            const button = document.createElement('button');
+            button.className = 'credential-thumbnail';
+            button.setAttribute('aria-label', `View ${cert.name || 'certificate'}`);
+            button.append(preview);
+            button.addEventListener('click', () => openCredential(cert));
+            card.append(button);
+        }
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <h3>${Credentials.escape(cert.name)}</h3>
+            <div class="cert-issuer">${Credentials.escape(cert.issuer)}</div>
+            <div class="cert-date">${Credentials.escape(cert.date)}</div>
+            <p class="cert-description">${Credentials.escape(cert.description)}</p>
+            <div class="cert-actions"></div>`;
+        const actions = content.querySelector('.cert-actions');
+        if (file) {
+            const view = document.createElement('button');
+            view.className = 'btn primary';
+            view.textContent = 'View certificate';
+            view.addEventListener('click', () => openCredential(cert));
+            actions.append(view);
+        }
+        if (verify) {
+            const link = document.createElement('a');
+            link.href = verify;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'btn-verify';
+            link.textContent = 'Verify credential';
+            actions.append(link);
+        }
+        card.append(content);
+        grid.append(card);
+    });
+}
+
+function openCredential(cert) {
+    const source = Credentials.url(cert.file, true);
+    if (!source) return;
+    let documentURL;
+    try { documentURL = Credentials.documentURL(source); }
+    catch { PortfolioApp.announce('This document could not be opened. Please try another credential or contact me.'); return; }
+    const dialog = document.createElement('dialog');
+    dialog.className = 'credential-dialog';
+    dialog.setAttribute('aria-labelledby', 'credential-title');
+    dialog.innerHTML = `<div class="credential-toolbar"><h2 id="credential-title">${Credentials.escape(cert.name)}</h2><button type="button" class="btn secondary">Close</button></div>`;
+    const original = document.createElement('a');
+    original.href = documentURL;
+    original.target = '_blank';
+    original.rel = 'noopener noreferrer';
+    original.className = 'credential-original';
+    original.textContent = 'Open original document';
+    dialog.append(original);
+    if (Credentials.kind(source) === 'image') {
+        const image = document.createElement('img');
+        image.src = documentURL;
+        image.alt = cert.name || 'Certificate';
+        dialog.append(image);
+    } else if (Credentials.kind(source) === 'pdf') {
+        const pdf = document.createElement('iframe');
+        pdf.src = documentURL;
+        pdf.title = cert.name || 'Certificate PDF';
+        dialog.append(pdf);
+        const help = document.createElement('p');
+        help.textContent = 'If the PDF does not display on your device, use Open original document above.';
+        dialog.append(help);
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog.querySelector('button').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => { if (event.target === dialog) {
+        const bounds = dialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+    }});
+    dialog.addEventListener('close', () => {
+        document.body.style.overflow = previousOverflow;
+        dialog.remove();
+        if (documentURL.startsWith('blob:')) URL.revokeObjectURL(documentURL);
+    }, { once: true });
+    document.body.append(dialog);
+    const viewerTrigger = document.activeElement;
+    dialog.addEventListener('close', () => viewerTrigger?.focus(), { once: true });
+    dialog.showModal();
 }
 
 // ============================================
@@ -376,11 +465,20 @@ function renderSocialLinks(data) {
         { key: 'email', icon: 'fas fa-envelope', label: 'Email', url: personal.email ? `mailto:${personal.email}` : null }
     ];
 
+    const phoneLink = document.getElementById('contact-phone');
+    const phone = social.phone || personal.phone || '';
+    phoneLink.closest('.contact-item').hidden = !phone;
+    if (phone) { phoneLink.textContent = phone; phoneLink.href = `tel:${phone.replace(/[^+\d]/g, '')}`; }
+    const whatsappLink = document.getElementById('contact-whatsapp');
+    whatsappLink.closest('.contact-item').hidden = !social.whatsapp;
+    if (social.whatsapp) { whatsappLink.href = `https://wa.me/${social.whatsapp.replace(/\D/g, '')}`; whatsappLink.rel = 'noopener noreferrer'; }
+
     links.forEach(link => {
         if (link.url) {
             const a = document.createElement('a');
-            a.href = link.url;
+            a.href = ['email', 'phone', 'whatsapp'].includes(link.key) ? link.url : Credentials.url(link.url);
             a.target = '_blank';
+            a.rel = 'noopener noreferrer';
             a.className = `social-icon ${link.key}`;
             a.title = link.label;
             a.innerHTML = `<i class="${link.icon}"></i><span>${link.label}</span>`;
@@ -393,11 +491,14 @@ function renderSocialLinks(data) {
 // SHOW GROUP / PROJECT DETAIL
 // ============================================
 
-function showGroup(groupId) {
+function showGroup(groupId, navigate = true) {
+    PortfolioApp.resetView();
     const group = portfolioData.projectGroups.find(g => g.id == groupId);
     if (!group) return;
 
     currentGroup = groupId;
+    currentProject = null;
+    if (navigate) history.pushState(null, '', `#projects/group/${encodeURIComponent(groupId)}`);
     const container = document.getElementById('projects-grid');
     if (!container) return;
     const projects = group.projects || [];
@@ -420,18 +521,18 @@ function showGroup(groupId) {
                 <i class="fas fa-arrow-left"></i> Back to Groups
             </button>
             <h2 style="font-size:2.5rem;font-weight:800;">
-                <i class="${group.icon || 'fas fa-folder'}" style="color:var(--accent-primary);"></i>
-                ${group.name}
+                <i class="${Credentials.escape(group.icon || 'fas fa-folder')}" style="color:var(--accent-primary);"></i>
+                ${Credentials.escape(group.name)}
             </h2>
-            <p style="color:var(--text-secondary);">${group.description || ''}</p>
+            <p style="color:var(--text-secondary);">${Credentials.escape(group.description || '')}</p>
         </div>
         ${projects.map((project, pIndex) => {
             const projectId = project.id || pIndex;
             return `
-            <div class="project-card" onclick="showProjectDetail('${groupId}', '${projectId}')" style="cursor:pointer;">
+            <div class="project-card" role="button" tabindex="0" onclick="showProjectDetail('${groupId}', '${projectId}')" style="cursor:pointer;">
                 <div class="project-image">
                     ${project.images && project.images.length > 0 ? 
-                        `<img src="${project.images[0]}" alt="${project.title}">` :
+                        `<img src="${Credentials.escape(Credentials.url(project.images[0], true))}" alt="${Credentials.escape(project.title)}">` :
                         `<div style="display:flex;align-items:center;justify-content:center;height:100%;background:var(--bg-gradient);">
                             <i class="fas fa-code" style="font-size:3rem;color:var(--accent-primary);"></i>
                         </div>`
@@ -439,11 +540,11 @@ function showGroup(groupId) {
                 </div>
                 <div class="project-content">
                     <span class="project-tag">${project.technologies?.length || 0} Technologies</span>
-                    <h3>${project.title}</h3>
-                    <p>${project.description}</p>
+                    <h3>${Credentials.escape(project.title)}</h3>
+                    <p>${Credentials.escape(project.description)}</p>
                     <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem;">
                         ${project.technologies ? project.technologies.map(tech => 
-                            `<span style="background:var(--bg-primary);padding:0.2rem 0.6rem;border-radius:50px;font-size:0.75rem;color:var(--text-secondary);">${tech}</span>`
+                            `<span style="background:var(--bg-primary);padding:0.2rem 0.6rem;border-radius:50px;font-size:0.75rem;color:var(--text-secondary);">${Credentials.escape(tech)}</span>`
                         ).join('') : ''}
                     </div>
                     <div style="margin-top:1rem;color:var(--accent-primary);font-weight:600;font-size:0.9rem;">
@@ -457,14 +558,17 @@ function showGroup(groupId) {
     document.getElementById('projects').scrollIntoView({ behavior: 'smooth' });
 }
 
-function showGroups() {
+function showGroups(navigate = true) {
+    PortfolioApp.resetView();
+    if (navigate) history.pushState(null, '', '#projects');
     currentGroup = null;
     currentProject = null;
     renderProjectGroups(portfolioData);
     document.getElementById('projects').scrollIntoView({ behavior: 'smooth' });
 }
 
-function showProjectDetail(groupId, projectId) {
+function showProjectDetail(groupId, projectId, navigate = true) {
+    PortfolioApp.resetView();
     const group = portfolioData.projectGroups.find(g => g.id == groupId);
     if (!group) return;
 
@@ -472,34 +576,86 @@ function showProjectDetail(groupId, projectId) {
     if (!project) return;
 
     currentProject = projectId;
+    currentGroup = groupId;
+    if (navigate) history.pushState(null, '', `#projects/group/${encodeURIComponent(groupId)}/project/${encodeURIComponent(projectId)}`);
     const container = document.getElementById('projects-grid');
     if (!container) return;
 
     container.innerHTML = `
         <div style="grid-column:1/-1;">
             <button onclick="showGroup('${groupId}')" class="btn secondary" style="margin-bottom:2rem;">
-                <i class="fas fa-arrow-left"></i> Back to ${group.name}
+                <i class="fas fa-arrow-left"></i> Back to ${Credentials.escape(group.name)}
             </button>
         </div>
         <div style="grid-column:1/-1;background:var(--bg-card);padding:2.5rem;border-radius:16px;border:1px solid var(--border-color);">
-            <h1 style="font-size:2.5rem;font-weight:800;margin-bottom:0.5rem;">${project.title}</h1>
-            <p style="color:var(--text-secondary);font-size:1.1rem;line-height:1.8;">${project.description}</p>
+            <h1 style="font-size:2.5rem;font-weight:800;margin-bottom:0.5rem;">${Credentials.escape(project.title)}</h1>
+            <p style="color:var(--text-secondary);font-size:1.1rem;line-height:1.8;">${Credentials.escape(project.description)}</p>
             ${project.technologies ? `
                 <div style="margin-top:1.5rem;">
                     <h4 style="margin-bottom:0.5rem;">Technologies</h4>
                     <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-                        ${project.technologies.map(tech => `<span style="background:var(--bg-primary);padding:0.3rem 1rem;border-radius:50px;font-size:0.9rem;border:1px solid var(--border-color);">${tech}</span>`).join('')}
+                        ${project.technologies.map(tech => `<span style="background:var(--bg-primary);padding:0.3rem 1rem;border-radius:50px;font-size:0.9rem;border:1px solid var(--border-color);">${Credentials.escape(tech)}</span>`).join('')}
                     </div>
                 </div>
             ` : ''}
             ${project.github || project.demo ? `
                 <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;">
-                    ${project.github ? `<a href="${project.github}" target="_blank" class="btn-github"><i class="fab fa-github"></i> View on GitHub</a>` : ''}
-                    ${project.demo ? `<a href="${project.demo}" target="_blank" class="btn primary"><i class="fas fa-external-link-alt"></i> Live Demo</a>` : ''}
+                    ${project.github ? `<a href="${Credentials.escape(Credentials.url(project.github))}" target="_blank" class="btn-github"><i class="fab fa-github"></i> View on GitHub</a>` : ''}
+                    ${project.demo ? `<a href="${Credentials.escape(Credentials.url(project.demo))}" target="_blank" class="btn primary"><i class="fas fa-external-link-alt"></i> Live Demo</a>` : ''}
                 </div>
             ` : ''}
         </div>
     `;
+
+    const gallery = document.createElement('div');
+    gallery.className = 'project-gallery';
+    (project.images || []).forEach((source, index) => {
+        const safe = Credentials.url(source, true);
+        if (!safe) return;
+        const button = document.createElement('button');
+        button.className = 'credential-thumbnail';
+        button.setAttribute('aria-label', `Enlarge ${project.title} image ${index + 1}`);
+        const image = document.createElement('img');
+        image.src = safe;
+        image.alt = `${project.title} - image ${index + 1}`;
+        image.loading = 'lazy';
+        button.append(image);
+        button.addEventListener('click', () => openCredential({ name: project.title, file: safe }));
+        gallery.append(button);
+    });
+    (project.videos || []).forEach(source => {
+        const safe = Credentials.mediaURL(source);
+        if (!safe) return;
+        const video = document.createElement('video');
+        video.src = safe;
+        video.controls = true;
+        video.preload = 'metadata';
+        gallery.append(video);
+    });
+    if (gallery.childElementCount) container.append(gallery);
+    if (project.readme) {
+        const detail = document.createElement('article');
+        detail.className = 'project-writeup';
+        const heading = document.createElement('h2');
+        heading.textContent = 'About this project';
+        const text = document.createElement('div');
+        text.className = 'project-readme';
+        text.textContent = project.readme;
+        detail.append(heading, text);
+        container.append(detail);
+    }
+
+    (project.files || []).forEach(file => {
+        const source = Credentials.attachmentURL(file.data);
+        if (!source) return;
+        const link = document.createElement('a');
+        link.className = 'btn secondary project-attachment';
+        link.textContent = `Download ${file.name || 'project document'}`;
+        link.download = file.name || 'project-document';
+        link.href = source;
+        container.append(link);
+    });
+    PortfolioApp.renderProjectActions(container, group, project);
 
     document.getElementById('projects').scrollIntoView({ behavior: 'smooth' });
 }
@@ -540,27 +696,31 @@ function initContactModes() {
             e.preventDefault();
             const name = document.getElementById('out-name').value.trim();
             const email = document.getElementById('out-email').value.trim();
-            const message = document.getElementById('out-message').value.trim();
+            const replyContact = document.getElementById('out-reply-contact').value.trim();
+            const rawMessage = document.getElementById('out-message').value.trim();
+            const message = replyContact ? `Reply contact: ${replyContact}\n\n${rawMessage}` : rawMessage;
             const activeChannel = document.querySelector('.channel-select button.active-channel');
             const channel = activeChannel ? activeChannel.dataset.channel : 'email';
 
+            const submit = outForm.querySelector('[type=submit]');
+            submit.disabled = true;
             try {
-                const response = await fetch(`${API_BASE}/api/contact-out`, {
+                const response = await PortfolioAPI.fetch(`${API_BASE}/api/contact-out`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, email, message, channel })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('✅ Message sent successfully!');
+                    alert('Your message is saved. I will reply using your preferred contact details.');
                     outForm.reset();
                 } else {
                     alert('❌ Failed to send message: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                alert('❌ Network error. Please try again.');
-            }
+                alert(error.message || 'Unable to send your message. Please try again.');
+            } finally { submit.disabled = false; }
         });
     }
 }
@@ -610,35 +770,66 @@ function initChat() {
 // ============================================
 
 function initAuthModal() {
-    const closeBtn = document.getElementById('closeAuthModal');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            document.getElementById('authModal').classList.remove('active');
-        });
-    }
-}
-
-function openAuthModal(mode) {
     const modal = document.getElementById('authModal');
-    if (!modal) return;
-
+    document.getElementById('closeAuthModal').addEventListener('click', closeAuthModal);
+    modal.addEventListener('click', event => { if (event.target === modal) closeAuthModal(); });
+    document.getElementById('authForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const error = document.getElementById('authError');
+        const username = document.getElementById('authUsername').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const confirmation = document.getElementById('authConfirmPassword').value;
+        const submit = document.getElementById('authSubmitBtn');
+        error.textContent = '';
+        error.classList.remove('show');
+        if (authMode === 'register' && (password.length < 6 || password !== confirmation)) {
+            error.textContent = password.length < 6 ? 'Use at least 6 characters.' : 'Passwords do not match.';
+            error.classList.add('show'); return;
+        }
+        submit.disabled = true;
+        try {
+            const response = await PortfolioAPI.fetch(`${API_BASE}/api/visitor-${authMode}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            if (!data.success || !data.token) throw new Error(data.error || 'Unable to sign in.');
+            visitorToken = data.token;
+            localStorage.setItem('visitorToken', visitorToken);
+            closeAuthModal();
+            document.getElementById('authForm').reset();
+            await loadConversation();
+            startChatPolling();
+        } catch (failure) { error.textContent = failure.message; error.classList.add('show'); }
+        finally { submit.disabled = false; }
+    });
+    startChatPolling();
+}
+let authTrigger = null;
+function closeAuthModal() {
+    document.getElementById('authModal').classList.remove('active');
+    authTrigger?.focus();
+}
+function openAuthModal(mode) {
+    authTrigger = document.activeElement;
     authMode = mode;
-    modal.classList.add('active');
-    document.getElementById('authModalTitle').textContent = mode === 'login' ? 'Login' : 'Register';
-    document.getElementById('authModalSub').textContent = mode === 'login' ? 'Enter your credentials' : 'Create an account';
+    document.getElementById('authModal').classList.add('active');
+    document.getElementById('authError').classList.remove('show');
+    document.getElementById('authModalTitle').textContent = mode === 'login' ? 'Welcome back' : 'Start a conversation';
+    document.getElementById('authModalSub').textContent = mode === 'login' ? 'Sign in to your conversation' : 'Create an account to chat with me';
     document.getElementById('authSubmitBtn').textContent = mode === 'login' ? 'Login' : 'Register';
     document.getElementById('confirmPasswordGroup').style.display = mode === 'register' ? 'block' : 'none';
-    document.getElementById('authSwitchText').innerHTML = mode === 'login' 
-        ? `Don't have an account? <a id="authSwitchLink">Register</a>`
-        : `Already have an account? <a id="authSwitchLink">Login</a>`;
-
-    const switchLink = document.getElementById('authSwitchLink');
-    if (switchLink) {
-        switchLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            openAuthModal(authMode === 'login' ? 'register' : 'login');
-        });
-    }
+    document.getElementById('authConfirmPassword').required = mode === 'register';
+    document.getElementById('authSwitchText').innerHTML = mode === 'login'
+        ? 'New here? <button type="button" id="authSwitchLink">Create an account</button>'
+        : 'Already registered? <button type="button" id="authSwitchLink">Login</button>';
+    document.getElementById('authSwitchLink').addEventListener('click', () => openAuthModal(authMode === 'login' ? 'register' : 'login'));
+    document.getElementById('authUsername').focus();
+}
+function startChatPolling() {
+    clearInterval(chatPollInterval);
+    if (visitorToken) chatPollInterval = setInterval(() => {
+        if (!document.hidden && document.getElementById('in-conversation').style.display !== 'none') loadConversation();
+    }, 10000);
 }
 
 function togglePasswordVisibility(inputId, btn) {
@@ -653,28 +844,41 @@ function togglePasswordVisibility(inputId, btn) {
 // CHAT MESSAGES
 // ============================================
 
-function loadConversation() {
+async function loadConversation() {
+    if (chatLoading || !visitorToken) return;
     const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
-
-    chatMessages.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:1rem;">Loading conversation...</p>';
-
-    fetch(`${API_BASE}/api/chat`, {
-        headers: { 'Authorization': `Bearer ${visitorToken}` }
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            currentConversationId = data.conversationId;
-            renderChatMessages(data.messages);
-            document.getElementById('chat-input').disabled = false;
-            document.getElementById('chat-send').disabled = false;
+    chatLoading = true;
+    try {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/chat`, { headers: { Authorization: `Bearer ${visitorToken}` } });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Unable to load conversation.');
+        currentConversationId = data.conversationId;
+        renderChatMessages(data.messages);
+        document.getElementById('chat-input').disabled = false;
+        document.getElementById('chat-send').disabled = false;
+        const status = document.getElementById('chat-auth-status');
+        status.replaceChildren(document.createTextNode(`Signed in as ${data.username || 'visitor'}. `));
+        const logout = document.createElement('button'); logout.type = 'button'; logout.textContent = 'Sign out';
+        logout.addEventListener('click', () => {
+            visitorToken = null; localStorage.removeItem('visitorToken'); clearInterval(chatPollInterval);
+            currentConversationId = null;
+            document.getElementById('chat-input').disabled = true;
+            document.getElementById('chat-send').disabled = true;
+            chatMessages.textContent = 'Signed out. Login to continue your conversation.';
+            status.replaceChildren();
+            const login = document.createElement('button'); login.textContent = 'Login to chat'; login.addEventListener('click', () => openAuthModal('login')); status.append(login);
+        });
+        status.append(logout);
+    } catch (error) {
+        if ([401, 403].includes(error.status)) {
+            visitorToken = null; localStorage.removeItem('visitorToken'); clearInterval(chatPollInterval);
+            document.getElementById('chat-input').disabled = true;
+            document.getElementById('chat-send').disabled = true;
+            document.getElementById('chat-auth-status').textContent = 'Your session expired. Please sign in again.';
+            const login = document.createElement('button'); login.textContent = 'Login'; login.addEventListener('click', () => openAuthModal('login')); document.getElementById('chat-auth-status').append(login);
         }
-    })
-    .catch(err => {
-        console.error('Error loading conversation:', err);
-        chatMessages.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:1rem;">Please login to chat</p>';
-    });
+        PortfolioApp.announce(error.message);
+    } finally { chatLoading = false; }
 }
 
 function renderChatMessages(messages) {
@@ -697,30 +901,22 @@ function renderChatMessages(messages) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function sendChatMessage() {
+async function sendChatMessage() {
     const input = document.getElementById('chat-input');
+    const send = document.getElementById('chat-send');
     const message = input.value.trim();
-    if (!message) return;
-
-    fetch(`${API_BASE}/api/chat/send`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${visitorToken}`
-        },
-        body: JSON.stringify({ message })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            input.value = '';
-            loadConversation();
-        }
-    })
-    .catch(err => {
-        console.error('Error sending message:', err);
-        alert('Failed to send message.');
-    });
+    if (!message || !visitorToken || send.disabled) return;
+    send.disabled = true;
+    try {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/chat/send`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${visitorToken}` }, body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Unable to send message.');
+        input.value = '';
+        await loadConversation();
+    } catch (error) { PortfolioApp.announce(error.message); }
+    finally { send.disabled = !visitorToken; }
 }
 
 // ============================================
@@ -746,12 +942,13 @@ const navLinks = document.getElementById('navLinks');
 if (hamburger) {
     hamburger.addEventListener('click', () => {
         hamburger.classList.toggle('active');
+        hamburger.setAttribute('aria-expanded', String(hamburger.classList.contains('active')));
         if (navLinks) navLinks.classList.toggle('active');
     });
 }
-document.querySelectorAll('.nav-links a').forEach(link => {
+document.querySelectorAll('.nav-links a, .app-dock a').forEach(link => {
     link.addEventListener('click', () => {
-        if (hamburger) hamburger.classList.remove('active');
+        if (hamburger) { hamburger.classList.remove('active'); hamburger.setAttribute('aria-expanded', 'false'); }
         if (navLinks) navLinks.classList.remove('active');
     });
 });
@@ -761,11 +958,60 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         const href = this.getAttribute('href');
         if (href && href !== '#') {
             e.preventDefault();
-            const target = document.querySelector(href);
+            if (href === '#projects') showGroups(false);
+            history.pushState(null, '', href);
+            const target = document.getElementById(href.slice(1));
             if (target) target.scrollIntoView({ behavior: 'smooth' });
         }
     });
 });
+
+function restoreProjectRoute() {
+    const parts = location.hash.slice(1).split('/').map(part => {
+        try { return decodeURIComponent(part); } catch { return part; }
+    });
+    if (parts[0] !== 'projects') {
+        if (!parts[0]) { currentGroup = null; currentProject = null; PortfolioApp.resetView(); renderProjectGroups(portfolioData); }
+        document.getElementById(parts[0])?.scrollIntoView(); return;
+    }
+    const groups = portfolioData.projectGroups || [];
+    const group = parts[1] === 'group' ? groups.find(g => String(g.id) === parts[2]) : null;
+    const project = group && parts[3] === 'project' ? (group.projects || []).find(p => String(p.id) === parts[4]) : null;
+    if (project) showProjectDetail(group.id, project.id, false);
+    else if (group) showGroup(group.id, false);
+    else showGroups(false);
+}
+window.addEventListener('popstate', restoreProjectRoute);
+document.addEventListener('keydown', event => {
+    const card = event.target.closest('.project-card[role="button"]');
+    if (card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); card.click(); }
+    if (event.key === 'Escape') closeAuthModal();
+    if (event.key === 'Tab' && document.getElementById('authModal').classList.contains('active')) {
+        const controls = [...document.getElementById('authModal').querySelectorAll('button, input')].filter(element => element.getClientRects().length && !element.disabled);
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    if (event.key === 'Escape' && hamburger) {
+        hamburger.classList.remove('active');
+        hamburger.setAttribute('aria-expanded', 'false');
+        navLinks?.classList.remove('active');
+    }
+});
+if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            document.querySelectorAll('.nav-links a, .app-dock a').forEach(link => {
+                const active = link.hash === `#${entry.target.id}`;
+                link.classList.toggle('active', active);
+                if (active) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        });
+    }, { rootMargin: '-15% 0px -55% 0px' });
+    document.querySelectorAll('section[id]').forEach(section => observer.observe(section));
+}
 
 // ============================================
 // INIT

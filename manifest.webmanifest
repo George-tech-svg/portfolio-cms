@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "George Ochieng | Work & Ideas",
+  "short_name": "George",
+  "description": "Explore my projects, skills and credentials, save work you like, and start a conversation.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Explore projects", "url": "/#projects" },
+    { "name": "View credentials", "url": "/#certifications" },
+    { "name": "Contact George", "url": "/#contact" }
+  ]
+}

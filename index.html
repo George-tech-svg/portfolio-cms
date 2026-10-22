@@ -14,6 +14,12 @@
     <meta name="twitter:title" content="George Onyango Ochieng - Portfolio">
     <meta name="twitter:description" content="Data Scientist & Web Developer. Building fast, responsive websites.">
 
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="canonical" href="https://portfolio-cms-seven-blush.vercel.app/">
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -21,6 +27,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
 </head>
 <body>
+    <a class="skip-link" href="#about">Skip to content</a>
+    <div id="connection-status" class="connection-status" role="status" hidden></div>
+    <div id="app-status" class="app-status" role="status" aria-live="polite"></div>
+    <div id="load-status" class="load-status" role="status" aria-live="polite">Loading portfolio...</div>
     <a href="login.html" class="admin-dot" title="Admin"></a>
 
     <nav>
@@ -36,9 +46,10 @@
                 <a href="#contact">Contact</a>
             </div>
             <div class="nav-actions">
+                <button id="install-app" class="install-app" hidden>Install app</button>
                 <a href="#" id="resume-link" class="btn-resume" download style="display:none;"><i class="fas fa-file-pdf"></i> Resume</a>
-                <button id="theme-toggle"><i class="fas fa-moon"></i></button>
-                <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+                <button id="theme-toggle" aria-label="Toggle color theme"><i class="fas fa-moon"></i></button>
+                <button class="hamburger" id="hamburger" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false"><span></span><span></span><span></span></button>
             </div>
         </div>
     </nav>
@@ -54,13 +65,14 @@
                 <h1 id="hero-title">Hi, I'm <span>Your Name</span></h1>
                 <p id="hero-subtitle">Web Developer creating amazing experiences</p>
                 <div class="hero-buttons">
-                    <a href="#projects" class="btn primary">View Projects <i class="fas fa-arrow-right"></i></a>
+                    <a href="#projects" class="btn secondary">Explore my work</a>
+                    <a href="#contact" class="btn primary">Discuss a Project <i class="fas fa-arrow-right"></i></a>
                     <a href="#" id="resume-btn" class="btn secondary" download style="display:none;"><i class="fas fa-file-pdf"></i> Download Resume</a>
                 </div>
                 <div class="hero-stats">
                     <div class="stat"><span class="stat-number" id="projects-count">0</span><span class="stat-label">Projects</span></div>
-                    <div class="stat"><span class="stat-number" id="clients-count">0</span><span class="stat-label">Happy Clients</span></div>
-                    <div class="stat"><span class="stat-number" id="experience-count">0</span><span class="stat-label">Years Experience</span></div>
+                    <div class="stat"><span class="stat-number" id="clients-count">0</span><span class="stat-label">Project Categories</span></div>
+                    <div class="stat"><span class="stat-number" id="experience-count">0</span><span class="stat-label">Experience Entries</span></div>
                 </div>
             </div>
             <div class="hero-image">
@@ -82,6 +94,12 @@
                 <h2>Featured <span>Projects</span></h2>
                 <p>Each project is crafted with attention to detail and user experience</p>
             </div>
+            <div class="project-explorer" role="search" aria-label="Find projects">
+                <div class="project-search-field"><label for="project-search">Find something interesting</label><input id="project-search" type="search" placeholder="Search projects, skills or technologies..." autocomplete="off"></div>
+                <button id="saved-projects" class="btn secondary" aria-pressed="false">Saved projects</button>
+            </div>
+            <p id="project-result-count" class="result-count" role="status" aria-live="polite"></p>
+            <div id="project-results" class="project-results" hidden></div>
             <div id="projects-grid" class="projects-grid"></div>
         </div>
     </section>
@@ -105,6 +123,8 @@
                 <span class="label">About Me</span>
                 <h2>Passionate about <span>building</span> great software</h2>
                 <div id="about-text"></div>
+                <p id="welcome-message"></p>
+                <video id="welcome-video" controls playsinline preload="metadata" hidden aria-label="An introduction from George"></video>
             </div>
         </div>
     </section>
@@ -170,14 +190,14 @@
                 <div class="contact-form-wrapper">
                     <h3>Send a Message</h3>
                     <div class="contact-mode">
-                        <button class="active" data-mode="out">Out Conversation</button>
-                        <button data-mode="in">In Conversation</button>
+                        <button class="active" data-mode="out">Send a message</button>
+                        <button data-mode="in">Website chat</button>
                     </div>
 
                     <div id="out-conversation" class="conversation-mode">
                         <div class="conversation-mode-desc">
                             <i class="fas fa-info-circle"></i> 
-                            Send a message via your preferred channel (Email, WhatsApp, or Phone).
+                            Send me a message and choose how you would like me to reply.
                         </div>
                         <div class="channel-select">
                             <button class="active-channel" data-channel="email">Email</button>
@@ -193,11 +213,12 @@
                                 <label for="out-email"><i class="fas fa-envelope"></i> Your Email</label>
                                 <input type="email" id="out-email" placeholder="Enter your email" required>
                             </div>
+                            <div class="form-group"><label for="out-reply-contact">Phone or WhatsApp number (optional)</label><input type="tel" id="out-reply-contact" autocomplete="tel" placeholder="Your number, if you prefer a call or WhatsApp"></div>
                             <div class="form-group">
                                 <label for="out-message"><i class="fas fa-comment"></i> Your Message</label>
                                 <textarea id="out-message" rows="4" placeholder="Tell me about your project..." required></textarea>
                             </div>
-                            <button type="submit" class="btn primary"><i class="fas fa-paper-plane"></i> Send via selected channel</button>
+                            <button type="submit" class="btn primary"><i class="fas fa-paper-plane"></i> Send message</button>
                         </form>
                     </div>
 
@@ -224,12 +245,12 @@
         </div>
     </section>
 
-    <div id="authModal" class="auth-modal">
+    <div id="authModal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
         <div class="auth-modal-content">
             <button class="close-modal" id="closeAuthModal">&times;</button>
             <h2 id="authModalTitle">Login</h2>
             <p class="sub" id="authModalSub">Enter your credentials</p>
-            <div id="authError" class="error-msg"></div>
+            <div id="authError" class="error-msg" role="alert"></div>
             <form id="authForm">
                 <div class="form-group">
                     <label>Username</label>
@@ -266,6 +287,9 @@
         </div>
     </div>
 
+    <nav class="app-dock" aria-label="Quick navigation">
+        <a href="#projects">Explore</a><a href="#certifications">Credentials</a><a href="#about">About me</a><a href="#contact">Connect</a>
+    </nav>
     <footer>
         <div class="container footer-content">
             <p id="footer-text">© 2025 Built with <i class="fas fa-heart"></i></p>
@@ -277,6 +301,9 @@
         </div>
     </footer>
 
+    <script src="js/api.js"></script>
+    <script src="js/credentials.js"></script>
+    <script src="js/app.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>

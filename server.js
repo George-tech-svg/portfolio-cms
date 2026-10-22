@@ -11,7 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // JWT SECRET
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_change_this';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET must be configured before starting the backend.');
 
 // Cloudinary config
 cloudinary.config({
@@ -26,10 +27,7 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-pool.connect((err) => {
-    if (err) console.error('DB connection failed:', err.stack);
-    else console.log('Connected to PostgreSQL');
-});
+
 
 // ============================================
 // DATABASE SETUP - Auto-create tables
@@ -295,23 +293,23 @@ async function setupDatabase() {
         console.log('✅ welcome_video table');
 
         // Insert default profile
-        await pool.query(`
+        const seededProfile = await pool.query(`
             INSERT INTO profile (name, title, badge, hero_subtitle, welcome_message, email, footer)
-            VALUES (
+            SELECT
                 'Your Name',
                 'Web Designer & Developer',
                 '🚀 Available for Freelance Work',
                 'Building exceptional digital experiences with modern web technologies.',
                 'Welcome to my portfolio!',
                 'your.email@gmail.com',
-                '© 2025 Your Name. Built with ❤️'
-            )
-            ON CONFLICT DO NOTHING
+                '© 2026 Your Name'
+            WHERE NOT EXISTS (SELECT 1 FROM profile)
+            RETURNING id
         `);
         console.log('✅ Default profile inserted');
 
         // Insert default about paragraphs
-        await pool.query(`
+        if (seededProfile.rowCount > 0) await pool.query(`
             INSERT INTO about_paragraphs (content, display_order) VALUES 
             ('I am a passionate Web Designer & Developer with expertise in creating beautiful, functional digital experiences.', 1),
             ('My journey started with a curiosity for design and technology, which evolved into a deep passion for creating software that makes a difference.', 2)
@@ -321,22 +319,26 @@ async function setupDatabase() {
 
         console.log('🎉 Database setup complete!');
     } catch (error) {
-        console.error('❌ Database setup error:', error.message);
+        console.error('Database setup error:', error.message);
+        throw error;
     }
 }
 
-// Run setup when server starts
-setupDatabase();
+// Initialize the database before accepting requests (see startServer below).
 
 // ============================================
 // CORS - Use environment variable
 // ============================================
-const allowedOrigins = (process.env.CORS_ORIGINS || 'https://portfolio-0umz.onrender.com,https://portfolio-cms-k2at.onrender.com').split(',');
+const allowedOrigins = new Set([
+    'https://portfolio-cms-seven-blush.vercel.app',
+    'http://localhost:3000', 'http://127.0.0.1:3000',
+    ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean)
+]);
 
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.has(origin)) {
             callback(null, true);
         } else {
             console.warn('CORS blocked origin:', origin);
@@ -372,6 +374,17 @@ const query = async (text, params) => {
     }
 };
 
+async function transaction(work) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await work(client.query.bind(client));
+        await client.query('COMMIT');
+        return result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+}
+
 // JWT Auth Middleware (Admin)
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -383,6 +396,7 @@ function authenticateToken(req, res, next) {
         if (err) {
             return res.status(403).json({ error: 'Invalid or expired token.' });
         }
+        if (user.type === 'visitor') return res.status(403).json({ error: 'Admin access required.' });
         req.user = user;
         next();
     });
@@ -413,6 +427,10 @@ function authenticateVisitor(req, res, next) {
 
 app.get('/', (req, res) => res.json({ message: 'Portfolio API running' }));
 app.get('/api/test', (req, res) => res.json({ status: 'OK' }));
+app.get('/api/health', async (req, res) => {
+    try { await query('SELECT 1'); res.json({ status: 'OK' }); }
+    catch { res.status(503).json({ status: 'unavailable' }); }
+});
 app.get('/api/db-test', async (req, res) => {
     try {
         const result = await query('SELECT NOW()');
@@ -423,7 +441,7 @@ app.get('/api/db-test', async (req, res) => {
 });
 
 // Database setup endpoint
-app.get('/api/setup-db', async (req, res) => {
+app.get('/api/setup-db', authenticateToken, async (req, res) => {
     try {
         await setupDatabase();
         res.json({ success: true, message: 'Database setup completed!' });
@@ -563,7 +581,7 @@ app.post('/api/visitor-login', async (req, res) => {
 // PUBLIC PORTFOLIO DATA
 app.get('/api/data', async (req, res) => {
     try {
-        const profileRes = await query('SELECT * FROM profile LIMIT 1');
+        const profileRes = await query('SELECT * FROM profile ORDER BY id LIMIT 1');
         const profile = profileRes.rows[0] || {};
         const aboutRes = await query('SELECT content FROM about_paragraphs ORDER BY display_order');
         const paragraphs = aboutRes.rows.map(r => r.content);
@@ -665,7 +683,7 @@ app.post('/api/messages', async (req, res) => {
 app.post('/api/contact-out', async (req, res) => {
     try {
         const { name, email, message, channel } = req.body;
-        if (!name || !email || !message || !channel) {
+        if (typeof name !== 'string' || !name.trim() || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof message !== 'string' || !message.trim() || message.length > 10000 || !['email', 'whatsapp', 'phone'].includes(channel)) {
             return res.status(400).json({ error: 'Missing fields.' });
         }
         await query(
@@ -710,7 +728,7 @@ app.post('/api/chat/send', authenticateVisitor, async (req, res) => {
     try {
         const visitorId = req.user.id;
         const { message } = req.body;
-        if (!message || message.trim() === '') {
+        if (typeof message !== 'string' || !message.trim() || message.length > 10000) {
             return res.status(400).json({ error: 'Message cannot be empty.' });
         }
         const conv = await query('SELECT id FROM conversations WHERE visitor_id = $1', [visitorId]);
@@ -771,12 +789,12 @@ app.get('/api/admin/chat/conversations', authenticateToken, async (req, res) => 
 app.post('/api/admin/chat/reply', authenticateToken, async (req, res) => {
     try {
         const { conversationId, message } = req.body;
-        if (!conversationId || !message) {
+        if (!conversationId || typeof message !== 'string' || !message.trim() || message.length > 10000) {
             return res.status(400).json({ error: 'Missing fields.' });
         }
         await query(
             'INSERT INTO chat_messages (conversation_id, sender_type, sender_id, message) VALUES ($1, $2, $3, $4)',
-            [conversationId, 'admin', 1, message.trim()]
+            [conversationId, 'admin', req.user.id, message.trim()]
         );
         await query('UPDATE conversations SET last_message_at = NOW() WHERE id = $1', [conversationId]);
         res.json({ success: true });
@@ -814,15 +832,15 @@ app.delete('/api/admin/out-messages/:id', authenticateToken, async (req, res) =>
 app.put('/api/profile', authenticateToken, async (req, res) => {
     try {
         const { name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer } = req.body;
-        const check = await query('SELECT id FROM profile LIMIT 1');
+        const check = await query('SELECT id FROM profile ORDER BY id LIMIT 1');
         if (check.rowCount === 0) {
             await query(`INSERT INTO profile (name, title, badge, hero_subtitle, welcome_message, email, profile_image, about_image, resume, footer)
                          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
                 [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer]);
         } else {
             await query(`UPDATE profile SET name=$1, title=$2, badge=$3, hero_subtitle=$4, welcome_message=$5, email=$6,
-                         profile_image=$7, about_image=$8, resume=$9, footer=$10, updated_at=CURRENT_TIMESTAMP WHERE id=1`,
-                [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer]);
+                         profile_image=$7, about_image=$8, resume=$9, footer=$10, updated_at=CURRENT_TIMESTAMP WHERE id=$11`,
+                [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer, check.rows[0].id]);
         }
         res.json({ success: true });
     } catch (err) {
@@ -834,12 +852,15 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
 // About
 app.put('/api/about', authenticateToken, async (req, res) => {
     try {
-        const { paragraphs } = req.body;
-        await query('DELETE FROM about_paragraphs');
-        for (let i = 0; i < (paragraphs || []).length; i++) {
-            await query('INSERT INTO about_paragraphs (content, display_order) VALUES ($1, $2)', [paragraphs[i], i + 1]);
-        }
-        res.json({ success: true });
+        const saved = await transaction(async query => {
+            const { paragraphs } = req.body;
+            await query('DELETE FROM about_paragraphs');
+            for (let i = 0; i < (paragraphs || []).length; i++) {
+                await query('INSERT INTO about_paragraphs (content, display_order) VALUES ($1, $2)', [paragraphs[i], i + 1]);
+            }
+            return { success: true };
+        });
+        res.json(saved);
     } catch (err) {
         console.error('/api/about error:', err);
         res.status(500).json({ error: err.message });
@@ -849,22 +870,25 @@ app.put('/api/about', authenticateToken, async (req, res) => {
 // Skills
 app.put('/api/skills', authenticateToken, async (req, res) => {
     try {
-        const { skills } = req.body;
-        await query('DELETE FROM skill_items');
-        await query('DELETE FROM skills');
-        for (let i = 0; i < (skills || []).length; i++) {
-            const skill = skills[i];
-            const result = await query('INSERT INTO skills (category, icon, display_order) VALUES ($1,$2,$3) RETURNING id',
-                [skill.category, skill.icon || 'fas fa-code', i + 1]);
-            const skillId = result.rows[0].id;
-            if (skill.items && skill.items.length) {
-                for (let j = 0; j < skill.items.length; j++) {
-                    await query('INSERT INTO skill_items (skill_id, name, display_order) VALUES ($1,$2,$3)',
-                        [skillId, skill.items[j], j + 1]);
+        const saved = await transaction(async query => {
+            const { skills } = req.body;
+            await query('DELETE FROM skill_items');
+            await query('DELETE FROM skills');
+            for (let i = 0; i < (skills || []).length; i++) {
+                const skill = skills[i];
+                const result = await query('INSERT INTO skills (category, icon, display_order) VALUES ($1,$2,$3) RETURNING id',
+                    [skill.category, skill.icon || 'fas fa-code', i + 1]);
+                const skillId = result.rows[0].id;
+                if (skill.items && skill.items.length) {
+                    for (let j = 0; j < skill.items.length; j++) {
+                        await query('INSERT INTO skill_items (skill_id, name, display_order) VALUES ($1,$2,$3)',
+                            [skillId, skill.items[j], j + 1]);
+                    }
                 }
             }
-        }
-        res.json({ success: true });
+            return { success: true };
+        });
+        res.json(saved);
     } catch (err) {
         console.error('/api/skills error:', err);
         res.status(500).json({ error: err.message });
@@ -899,37 +923,43 @@ app.delete('/api/groups/:id', authenticateToken, async (req, res) => {
 // Projects
 app.post('/api/groups/:groupId/projects', authenticateToken, async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const { title, description, github, demo, readme, images, videos, technologies, files } = req.body;
-        const result = await query(
-            'INSERT INTO projects (group_id, title, description, github, demo, readme) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-            [groupId, title, description, github, demo, readme]
-        );
-        const projectId = result.rows[0].id;
-        if (images) for (const url of images) await query('INSERT INTO project_images (project_id, url) VALUES ($1,$2)', [projectId, url]);
-        if (videos) for (const url of videos) await query('INSERT INTO project_videos (project_id, url) VALUES ($1,$2)', [projectId, url]);
-        if (technologies) for (const tech of technologies) await query('INSERT INTO project_technologies (project_id, name) VALUES ($1,$2)', [projectId, tech]);
-        if (files) for (const file of files) await query('INSERT INTO project_files (project_id, name, data, size, type) VALUES ($1,$2,$3,$4,$5)',
-            [projectId, file.name, file.data, file.size, file.type]);
-        res.json({ success: true, id: projectId });
+        const saved = await transaction(async query => {
+            const { groupId } = req.params;
+            const { title, description, github, demo, readme, images, videos, technologies, files } = req.body;
+            const result = await query(
+                'INSERT INTO projects (group_id, title, description, github, demo, readme) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+                [groupId, title, description, github, demo, readme]
+            );
+            const projectId = result.rows[0].id;
+            if (images) for (const url of images) await query('INSERT INTO project_images (project_id, url) VALUES ($1,$2)', [projectId, url]);
+            if (videos) for (const url of videos) await query('INSERT INTO project_videos (project_id, url) VALUES ($1,$2)', [projectId, url]);
+            if (technologies) for (const tech of technologies) await query('INSERT INTO project_technologies (project_id, name) VALUES ($1,$2)', [projectId, tech]);
+            if (files) for (const file of files) await query('INSERT INTO project_files (project_id, name, data, size, type) VALUES ($1,$2,$3,$4,$5)',
+                [projectId, file.name, file.data, file.size, file.type]);
+            return { success: true, id: projectId };
+        });
+        res.json(saved);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.put('/api/projects/:id', authenticateToken, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { title, description, github, demo, readme, images, videos, technologies, files } = req.body;
-        await query('UPDATE projects SET title=$1, description=$2, github=$3, demo=$4, readme=$5 WHERE id=$6',
-            [title, description, github, demo, readme, id]);
-        await query('DELETE FROM project_images WHERE project_id=$1', [id]);
-        if (images) for (const url of images) await query('INSERT INTO project_images (project_id, url) VALUES ($1,$2)', [id, url]);
-        await query('DELETE FROM project_videos WHERE project_id=$1', [id]);
-        if (videos) for (const url of videos) await query('INSERT INTO project_videos (project_id, url) VALUES ($1,$2)', [id, url]);
-        await query('DELETE FROM project_technologies WHERE project_id=$1', [id]);
-        if (technologies) for (const tech of technologies) await query('INSERT INTO project_technologies (project_id, name) VALUES ($1,$2)', [id, tech]);
-        await query('DELETE FROM project_files WHERE project_id=$1', [id]);
-        if (files) for (const file of files) await query('INSERT INTO project_files (project_id, name, data, size, type) VALUES ($1,$2,$3,$4,$5)',
-            [id, file.name, file.data, file.size, file.type]);
-        res.json({ success: true });
+        const saved = await transaction(async query => {
+            const { id } = req.params;
+            const { title, description, github, demo, readme, images, videos, technologies, files } = req.body;
+            await query('UPDATE projects SET title=$1, description=$2, github=$3, demo=$4, readme=$5 WHERE id=$6',
+                [title, description, github, demo, readme, id]);
+            await query('DELETE FROM project_images WHERE project_id=$1', [id]);
+            if (images) for (const url of images) await query('INSERT INTO project_images (project_id, url) VALUES ($1,$2)', [id, url]);
+            await query('DELETE FROM project_videos WHERE project_id=$1', [id]);
+            if (videos) for (const url of videos) await query('INSERT INTO project_videos (project_id, url) VALUES ($1,$2)', [id, url]);
+            await query('DELETE FROM project_technologies WHERE project_id=$1', [id]);
+            if (technologies) for (const tech of technologies) await query('INSERT INTO project_technologies (project_id, name) VALUES ($1,$2)', [id, tech]);
+            await query('DELETE FROM project_files WHERE project_id=$1', [id]);
+            if (files) for (const file of files) await query('INSERT INTO project_files (project_id, name, data, size, type) VALUES ($1,$2,$3,$4,$5)',
+                [id, file.name, file.data, file.size, file.type]);
+            return { success: true };
+        });
+        res.json(saved);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
@@ -1079,6 +1109,19 @@ app.post('/api/upload-multiple', authenticateToken, upload.array('images', 10), 
 // ============================================
 // START SERVER
 // ============================================
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server running on port ${PORT}`);
+app.use((error, req, res, next) => {
+    if (error.message === 'Not allowed by CORS') return res.status(403).json({ error: 'Origin is not allowed.' });
+    if (error.type === 'entity.too.large' || error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File or request is too large.' });
+    if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON request.' });
+    console.error('Request failed:', error.message);
+    res.status(500).json({ error: 'The server could not complete this request.' });
 });
+
+async function startServer() {
+    await setupDatabase();
+    return app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+}
+if (require.main === module) {
+    startServer().catch(error => { console.error('Backend startup failed:', error.message); process.exitCode = 1; pool.end(); });
+}
+module.exports = { app, pool, startServer, setupDatabase };

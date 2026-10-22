@@ -76,8 +76,9 @@
     </div>
 </div>
 
+<script src="js/api.js"></script>
 <script>
-    const API_BASE = 'https://portfolio-cms-k2at.onrender.com';
+    const API_BASE = window.PortfolioAPI.baseURL;
 
     document.querySelectorAll('.toggle-password').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -98,12 +99,12 @@
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value.trim();
+        const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('loginError');
         const errorMsg = document.getElementById('errorMsg');
 
         try {
-            const res = await fetch(`${API_BASE}/api/login`, {
+            const res = await PortfolioAPI.fetch(`${API_BASE}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })

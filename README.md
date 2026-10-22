@@ -1,3 +1,5 @@
+Current deployment: [Vercel frontend](https://portfolio-cms-seven-blush.vercel.app/) + [Render API](https://portfolio-0umz.onrender.com). See [DEPLOYMENT.md](DEPLOYMENT.md) for the current build, environment, and verification instructions.
+
 # 🚀 Personal Portfolio CMS
 
 A **full‑stack portfolio website** with a built‑in Content Management System (CMS).  

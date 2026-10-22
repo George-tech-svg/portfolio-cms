@@ -4,7 +4,7 @@
 
 console.log('✅ admin.js loaded (API version)');
 
-const API_BASE = 'https://portfolio-cms-k2at.onrender.com';
+const API_BASE = window.PortfolioAPI.baseURL;
 let portfolioData = {};
 let imageCounter = 0;
 let videoCounter = 0;
@@ -43,11 +43,9 @@ function getFileUploadHeaders() {
 // ============================================
 
 async function initAdmin() {
-    await loadData();
+    try { await loadData(); } catch (error) { alert('Unable to load portfolio: ' + error.message); return; }
     setupTabs();
     setupSidebarButtons();
-    updateDashboard();
-    renderAll();
     setupDynamicUploads();
 }
 
@@ -57,7 +55,7 @@ async function initAdmin() {
 
 async function loadData() {
     try {
-        const response = await fetch(`${API_BASE}/api/data`);
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/data`);
         if (!response.ok) throw new Error('Failed to fetch data');
         portfolioData = await response.json();
 
@@ -76,7 +74,7 @@ async function loadData() {
         updateDashboard();
     } catch (error) {
         console.error('Error loading data:', error);
-        alert('Failed to load portfolio data. Please check your internet connection.');
+        throw error;
     }
 }
 
@@ -84,12 +82,11 @@ async function loadData() {
 // SAVE DATA TO BACKEND
 // ============================================
 
-async function saveData() {
+async function saveData(sections = ['profile', 'about']) {
     try {
         const headers = getAuthHeaders();
 
-        // Save profile
-        await fetch(`${API_BASE}/api/profile`, {
+        if (sections.includes('profile')) await PortfolioAPI.fetch(`${API_BASE}/api/profile`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify({
@@ -106,22 +103,19 @@ async function saveData() {
             })
         });
 
-        // Save about
-        await fetch(`${API_BASE}/api/about`, {
+        if (sections.includes('about')) await PortfolioAPI.fetch(`${API_BASE}/api/about`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify({ paragraphs: portfolioData.about?.paragraphs || [] })
         });
 
-        // Save skills
-        await fetch(`${API_BASE}/api/skills`, {
+        if (sections.includes('skills')) await PortfolioAPI.fetch(`${API_BASE}/api/skills`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify({ skills: portfolioData.skills || [] })
         });
 
-        // Save welcome video
-        await fetch(`${API_BASE}/api/welcome-video`, {
+        if (sections.includes('welcome-video')) await PortfolioAPI.fetch(`${API_BASE}/api/welcome-video`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify({ url: portfolioData.videos?.welcome || '' })
@@ -131,7 +125,109 @@ async function saveData() {
         console.log('✅ Data saved to backend');
     } catch (error) {
         console.error('Error saving data:', error);
-        alert('Failed to save data. Please check your internet connection.');
+        throw error;
+    }
+}
+
+// ============================================
+// RENDER ALL SECTIONS
+// ============================================
+
+function renderAll() {
+    renderProfileForm();
+    renderSkillsList();
+    renderGroupsList();
+    renderExperienceList();
+    renderEducationList();
+    renderCertificationsList();
+    renderSocialList();
+    renderMessages();
+    renderResumePreview();
+    renderWelcomeVideoPreview();
+    updateGroupSelect();
+    updateDashboard();
+}
+
+// ============================================
+// DASHBOARD
+// ============================================
+
+function updateDashboard() {
+    const groups = portfolioData.projectGroups || [];
+    const projects = groups.reduce((sum, g) => sum + (g.projects?.length || 0), 0);
+
+    const statGroups = document.getElementById('statGroups');
+    if (statGroups) statGroups.textContent = groups.length;
+
+    const statProjects = document.getElementById('statProjects');
+    if (statProjects) statProjects.textContent = projects;
+
+    const statExperience = document.getElementById('statExperience');
+    if (statExperience) statExperience.textContent = portfolioData.experience?.length || 0;
+
+    const statEducation = document.getElementById('statEducation');
+    if (statEducation) statEducation.textContent = portfolioData.education?.length || 0;
+
+    const statCertifications = document.getElementById('statCertifications');
+    if (statCertifications) statCertifications.textContent = portfolioData.certifications?.length || 0;
+
+    loadMessages();
+}
+
+// ============================================
+// TABS
+// ============================================
+
+function setupTabs() {
+    document.querySelectorAll('.sidebar-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tab = this.dataset.tab;
+            switchTab(tab);
+        });
+    });
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.sidebar-btn').forEach(el => el.classList.remove('active'));
+
+    const target = document.getElementById('tab-' + tabId);
+    if (target) target.classList.add('active');
+
+    const btn = document.querySelector(`.sidebar-btn[data-tab="${tabId}"]`);
+    if (btn) btn.classList.add('active');
+
+    if (tabId === 'skills') renderSkillsList();
+    if (tabId === 'projects') renderGroupsList();
+    if (tabId === 'experience') renderExperienceList();
+    if (tabId === 'education') renderEducationList();
+    if (tabId === 'certifications') renderCertificationsList();
+    if (tabId === 'social') renderSocialList();
+    if (tabId === 'messages') renderMessages();
+    if (tabId === 'profile') renderProfileForm();
+    if (tabId === 'chat') loadAdminChat();
+    if (tabId === 'out-messages') loadOutMessages();
+}
+
+function setupSidebarButtons() {}
+
+// ============================================
+// DYNAMIC UPLOAD SETUP
+// ============================================
+
+function setupDynamicUploads() {
+    const addImageBtn = document.getElementById('addImageBtn');
+    if (addImageBtn) {
+        addImageBtn.addEventListener('click', function() {
+            addImageUploadRow();
+        });
+    }
+
+    const addVideoBtn = document.getElementById('addVideoBtn');
+    if (addVideoBtn) {
+        addVideoBtn.addEventListener('click', function() {
+            addVideoUploadRow();
+        });
     }
 }
 
@@ -147,18 +243,16 @@ function renderProfileForm() {
     document.getElementById('profileSubtitle').value = p.heroSubtitle || '';
     document.getElementById('welcomeMessage').value = p.welcomeMessage || '';
     document.getElementById('profileEmail').value = p.email || '';
-    
+
     const bio = portfolioData.about?.paragraphs?.join('\n\n') || '';
     document.getElementById('profileBio').value = bio;
-    
-    // Show profile image preview
+
     if (p.profileImage && p.profileImage.startsWith('http')) {
         document.getElementById('profilePicturePreview').innerHTML = `<img src="${p.profileImage}" style="width:150px;height:150px;border-radius:50%;object-fit:cover;">`;
     } else {
         document.getElementById('profilePicturePreview').innerHTML = '<p style="color:var(--text-light);">No profile image uploaded</p>';
     }
-    
-    // Show about image preview
+
     if (p.aboutImage && p.aboutImage.startsWith('http')) {
         document.getElementById('aboutImagePreview').innerHTML = `<img src="${p.aboutImage}" style="max-width:200px;max-height:150px;object-fit:cover;border-radius:12px;">`;
     } else {
@@ -172,7 +266,7 @@ function renderProfileForm() {
 
 document.getElementById('profileForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const p = portfolioData.personal || {};
     p.name = document.getElementById('profileName').value.trim();
     p.title = document.getElementById('profileTitle').value.trim();
@@ -181,20 +275,20 @@ document.getElementById('profileForm').addEventListener('submit', async function
     p.welcomeMessage = document.getElementById('welcomeMessage').value.trim();
     p.email = document.getElementById('profileEmail').value.trim();
     portfolioData.personal = p;
-    
+
     const bioText = document.getElementById('profileBio').value.trim();
     portfolioData.about = {
         paragraphs: bioText ? bioText.split('\n\n').filter(p => p.trim()) : []
     };
-    
-    await saveData();
+
+    try { await saveData(); } catch (error) { alert('Failed to save: ' + error.message); return; }
     alert('✅ Profile saved!');
     renderProfileForm();
     updateDashboard();
 });
 
 // ============================================
-// PROFILE PICTURE UPLOAD - FIXED VERSION
+// PROFILE PICTURE UPLOAD
 // ============================================
 
 document.getElementById('profilePicture').addEventListener('change', async function(e) {
@@ -205,25 +299,23 @@ document.getElementById('profilePicture').addEventListener('change', async funct
     formData.append('image', file);
 
     try {
-        const response = await fetch(`${API_BASE}/api/upload`, {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
             method: 'POST',
             headers: getFileUploadHeaders(),
             body: formData
         });
         const result = await response.json();
-        
+
         if (result.success && result.url) {
-            // ✅ SAVE URL TO DATABASE IMMEDIATELY
             portfolioData.personal.profileImage = result.url;
-            await saveData();
-            
-            // Show preview
+            await saveData(['profile']);
+
             const img = document.createElement('img');
             img.src = result.url;
             img.style.cssText = 'width:150px;height:150px;border-radius:50%;object-fit:cover;';
             document.getElementById('profilePicturePreview').innerHTML = '';
             document.getElementById('profilePicturePreview').appendChild(img);
-            
+
             alert('✅ Profile picture uploaded to Cloudinary and saved!');
         } else {
             alert('Upload failed: ' + (result.error || 'Unknown error'));
@@ -235,7 +327,7 @@ document.getElementById('profilePicture').addEventListener('change', async funct
 });
 
 // ============================================
-// ABOUT IMAGE UPLOAD - FIXED VERSION
+// ABOUT IMAGE UPLOAD
 // ============================================
 
 document.getElementById('aboutImage').addEventListener('change', async function(e) {
@@ -246,25 +338,23 @@ document.getElementById('aboutImage').addEventListener('change', async function(
     formData.append('image', file);
 
     try {
-        const response = await fetch(`${API_BASE}/api/upload`, {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
             method: 'POST',
             headers: getFileUploadHeaders(),
             body: formData
         });
         const result = await response.json();
-        
+
         if (result.success && result.url) {
-            // ✅ SAVE URL TO DATABASE IMMEDIATELY
             portfolioData.personal.aboutImage = result.url;
-            await saveData();
-            
-            // Show preview
+            await saveData(['profile']);
+
             const img = document.createElement('img');
             img.src = result.url;
             img.style.cssText = 'max-width:200px;max-height:150px;object-fit:cover;border-radius:12px;';
             document.getElementById('aboutImagePreview').innerHTML = '';
             document.getElementById('aboutImagePreview').appendChild(img);
-            
+
             alert('✅ About image uploaded to Cloudinary and saved!');
         } else {
             alert('Upload failed: ' + (result.error || 'Unknown error'));
@@ -345,9 +435,9 @@ function deleteSkillCategory(index) {
     if (!confirm('Delete this skill category and all its skills?')) return;
     portfolioData.skills.splice(index, 1);
     renderSkillsList();
-    saveData().then(() => {
-        alert('✅ Category deleted and changes saved.');
-    });
+    saveData(['skills']).then(() => {
+        alert('Category deleted and changes saved.');
+    }).catch(error => alert('Failed to save: ' + error.message));
 }
 
 document.getElementById('skillCategoryForm').addEventListener('submit', function(e) {
@@ -372,9 +462,9 @@ document.getElementById('skillCategoryForm').addEventListener('submit', function
 
     hideAddSkillCategory();
     renderSkillsList();
-    saveData().then(() => {
+    saveData(['skills']).then(() => {
         alert('✅ Category saved successfully!');
-    });
+    }).catch(error => alert('Failed to save: ' + error.message));
 });
 
 function addSkillItem(index) {
@@ -389,9 +479,9 @@ function addSkillItem(index) {
     portfolioData.skills[index].items.push(skillName);
     input.value = '';
     renderSkillsList();
-    saveData().then(() => {
+    saveData(['skills']).then(() => {
         console.log('✅ Skill added and saved.');
-    });
+    }).catch(error => alert('Failed to save: ' + error.message));
 }
 
 function deleteSkillItem(categoryIndex, itemIndex) {
@@ -399,14 +489,14 @@ function deleteSkillItem(categoryIndex, itemIndex) {
     if (portfolioData.skills[categoryIndex] && portfolioData.skills[categoryIndex].items) {
         portfolioData.skills[categoryIndex].items.splice(itemIndex, 1);
         renderSkillsList();
-        saveData().then(() => {
+        saveData(['skills']).then(() => {
             console.log('✅ Skill removed and saved.');
-        });
+        }).catch(error => alert('Failed to save: ' + error.message));
     }
 }
 
 async function saveSkills() {
-    await saveData();
+    try { await saveData(['skills']); } catch (error) { alert('Failed to save: ' + error.message); return; }
     alert('✅ All skills saved successfully!');
 }
 
@@ -496,7 +586,7 @@ async function editGroup(groupId) {
 async function deleteGroup(groupId) {
     if (!confirm('Delete this group and all its projects?')) return;
     try {
-        await fetch(`${API_BASE}/api/groups/${groupId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/groups/${groupId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -518,13 +608,13 @@ document.getElementById('groupForm').addEventListener('submit', async function(e
 
     try {
         if (editId) {
-            await fetch(`${API_BASE}/api/groups/${editId}`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/groups/${editId}`, {
                 method: 'PUT',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ name, icon, description })
             });
         } else {
-            await fetch(`${API_BASE}/api/groups`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/groups`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ name, icon, description })
@@ -567,6 +657,7 @@ function showAddProject(groupId) {
     document.getElementById('projectReadme').value = '';
     document.getElementById('imageUploadContainer').innerHTML = '';
     document.getElementById('videoUploadContainer').innerHTML = '';
+    document.getElementById('projectFiles').value = '';
     document.getElementById('projectFilesPreview').innerHTML = '';
     imageCounter = 0;
     videoCounter = 0;
@@ -610,10 +701,11 @@ async function editProject(groupId, projectId) {
     const videos = project.videos || [];
     videos.forEach(url => addVideoPreview(url));
 
+    document.getElementById('projectFiles').value = '';
     const filesPreview = document.getElementById('projectFilesPreview');
     filesPreview.innerHTML = '';
     (project.files || []).forEach(f => {
-        filesPreview.innerHTML += `<span style="display:inline-block;background:var(--bg-primary);padding:0.3rem 0.8rem;border-radius:50px;font-size:0.8rem;border:1px solid var(--border-color);">📎 ${f.name}</span>`;
+        filesPreview.innerHTML += `<span style="display:inline-block;background:var(--bg-primary);padding:0.3rem 0.8rem;border-radius:50px;font-size:0.8rem;border:1px solid var(--border-color);">📎 ${Credentials.escape(f.name)}</span>`;
     });
 
     document.getElementById('addProjectForm').scrollIntoView({ behavior: 'smooth' });
@@ -623,7 +715,7 @@ async function editProject(groupId, projectId) {
 async function deleteProject(groupId, projectId) {
     if (!confirm('Delete this project?')) return;
     try {
-        await fetch(`${API_BASE}/api/projects/${projectId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/projects/${projectId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -666,15 +758,6 @@ document.getElementById('projectGroupSelect').addEventListener('change', functio
 // ============================================
 // DYNAMIC UPLOAD SETUP
 // ============================================
-
-function setupDynamicUploads() {
-    document.getElementById('addImageBtn').addEventListener('click', function() {
-        addImageUploadRow();
-    });
-    document.getElementById('addVideoBtn').addEventListener('click', function() {
-        addVideoUploadRow();
-    });
-}
 
 function addImageUploadRow() {
     const container = document.getElementById('imageUploadContainer');
@@ -766,7 +849,7 @@ async function uploadFile(fileInput, previewDiv, type) {
     formData.append('images', file);
 
     try {
-        const response = await fetch(`${API_BASE}/api/upload-multiple`, {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload-multiple`, {
             method: 'POST',
             headers: getFileUploadHeaders(),
             body: formData
@@ -871,50 +954,52 @@ document.getElementById('projectForm').addEventListener('submit', async function
         videoUrls.push(row.dataset.uploadedUrl);
     });
 
-    const fileInput = document.getElementById('projectFiles');
-    const files = [];
-    if (fileInput.files.length > 0) {
-        for (let f of fileInput.files) {
-            const reader = new FileReader();
-            const data = await new Promise((resolve) => {
-                reader.onload = (e) => resolve(e.target.result);
+    const submit = document.getElementById('projectSubmitBtn');
+    submit.disabled = true;
+    try {
+        const fileInput = document.getElementById('projectFiles');
+        if ([...fileInput.files].reduce((total, file) => total + file.size, 0) > 25 * 1024 * 1024) throw new Error('Project attachments must total 25 MB or less.');
+        const files = [];
+        if (fileInput.files.length > 0) {
+            for (let f of fileInput.files) {
+                const reader = new FileReader();
+                const data = await new Promise((resolve, reject) => {
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = () => reject(new Error('Unable to read attachment: ' + f.name));
                 reader.readAsDataURL(f);
-            });
-            files.push({ name: f.name, data, size: f.size, type: f.type });
-        }
-    }
-
-    if (projectId) {
-        const group = portfolioData.projectGroups.find(g => g.id == groupId);
-        const existingProject = group?.projects?.find(p => p.id == projectId);
-        if (existingProject && existingProject.files) {
-            if (files.length === 0 && existingProject.files.length > 0) {
-                files.push(...existingProject.files);
+                });
+                files.push({ name: f.name, data, size: f.size, type: f.type });
             }
         }
-    }
 
-    const projectData = {
-        title,
-        description,
-        github,
-        demo,
-        readme,
-        images: imageUrls,
-        videos: videoUrls,
-        technologies: tech,
-        files
-    };
-
-    try {
         if (projectId) {
-            await fetch(`${API_BASE}/api/projects/${projectId}`, {
+            const group = portfolioData.projectGroups.find(g => g.id == groupId);
+            const existingProject = group?.projects?.find(p => p.id == projectId);
+            if (existingProject && existingProject.files) {
+                files.unshift(...existingProject.files);
+            }
+        }
+
+        const projectData = {
+            title,
+            description,
+            github,
+            demo,
+            readme,
+            images: imageUrls,
+            videos: videoUrls,
+            technologies: tech,
+            files
+        };
+
+        if (projectId) {
+            await PortfolioAPI.fetch(`${API_BASE}/api/projects/${projectId}`, {
                 method: 'PUT',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(projectData)
             });
         } else {
-            await fetch(`${API_BASE}/api/groups/${groupId}/projects`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/groups/${groupId}/projects`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(projectData)
@@ -926,8 +1011,8 @@ document.getElementById('projectForm').addEventListener('submit', async function
         updateDashboard();
         alert('✅ Project saved!');
     } catch (error) {
-        alert('❌ Failed to save project: ' + error.message);
-    }
+        alert('Failed to save project: ' + error.message);
+    } finally { submit.disabled = false; }
 });
 
 // ============================================
@@ -989,7 +1074,7 @@ async function editExperience(expId) {
 async function deleteExperience(expId) {
     if (!confirm('Delete this experience?')) return;
     try {
-        await fetch(`${API_BASE}/api/experience/${expId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/experience/${expId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -1012,13 +1097,13 @@ document.getElementById('experienceForm').addEventListener('submit', async funct
 
     try {
         if (editId) {
-            await fetch(`${API_BASE}/api/experience/${editId}`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/experience/${editId}`, {
                 method: 'PUT',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ company, role, period, description })
             });
         } else {
-            await fetch(`${API_BASE}/api/experience`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/experience`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ company, role, period, description })
@@ -1096,7 +1181,7 @@ async function editEducation(eduId) {
 async function deleteEducation(eduId) {
     if (!confirm('Delete this education?')) return;
     try {
-        await fetch(`${API_BASE}/api/education/${eduId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/education/${eduId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -1120,13 +1205,13 @@ document.getElementById('educationForm').addEventListener('submit', async functi
 
     try {
         if (editId) {
-            await fetch(`${API_BASE}/api/education/${editId}`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/education/${editId}`, {
                 method: 'PUT',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ institution, degree, field, period, description })
             });
         } else {
-            await fetch(`${API_BASE}/api/education`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/education`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ institution, degree, field, period, description })
@@ -1156,11 +1241,11 @@ function renderCertificationsList() {
     container.innerHTML = certs.map((cert, i) => `
         <div class="admin-item">
             <div class="item-info">
-                <h4>${cert.name}</h4>
-                <p><strong>${cert.issuer}</strong> ${cert.date ? '· ' + cert.date : ''}</p>
-                ${cert.description ? `<p style="color:var(--text-secondary);font-size:0.9rem;">${cert.description}</p>` : ''}
-                ${cert.file ? `<p><a href="${cert.file}" target="_blank" style="color:var(--accent-primary);">📎 View Certificate</a></p>` : ''}
-                ${cert.link ? `<p><a href="${cert.link}" target="_blank" style="color:var(--accent-primary);">🔗 Verify</a></p>` : ''}
+                <h4>${Credentials.escape(cert.name)}</h4>
+                <p><strong>${Credentials.escape(cert.issuer)}</strong> ${cert.date ? '· ' + Credentials.escape(cert.date) : ''}</p>
+                ${cert.description ? `<p style="color:var(--text-secondary);font-size:0.9rem;">${Credentials.escape(cert.description)}</p>` : ''}
+                ${Credentials.url(cert.file, true) ? `<p><a href="${Credentials.escape(Credentials.url(cert.file, true))}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-primary);">📎 View Certificate</a></p>` : ''}
+                ${Credentials.url(cert.link) ? `<p><a href="${Credentials.escape(Credentials.url(cert.link))}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-primary);">🔗 Verify</a></p>` : ''}
             </div>
             <div class="item-actions">
                 <button onclick="editCertification('${cert.id}')" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -1180,7 +1265,8 @@ function showAddCertification() {
     document.getElementById('certDate').value = '';
     document.getElementById('certDescription').value = '';
     document.getElementById('certLink').value = '';
-    document.getElementById('certFilePreview').innerHTML = '';
+    document.getElementById('certFile').value = '';
+    document.getElementById('certFilePreview').replaceChildren();
     document.getElementById('addCertificationForm').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -1200,16 +1286,18 @@ async function editCertification(certId) {
     document.getElementById('certDate').value = cert.date || '';
     document.getElementById('certDescription').value = cert.description || '';
     document.getElementById('certLink').value = cert.link || '';
-    if (cert.file) {
-        document.getElementById('certFilePreview').innerHTML = `<a href="${cert.file}" target="_blank">View File</a>`;
-    }
+    document.getElementById('certFile').value = '';
+    const preview = document.getElementById('certFilePreview');
+    preview.replaceChildren();
+    const credential = Credentials.preview(cert.file, cert.name);
+    if (credential) preview.append(credential);
     document.getElementById('addCertificationForm').scrollIntoView({ behavior: 'smooth' });
 }
 
 async function deleteCertification(certId) {
     if (!confirm('Delete this certification?')) return;
     try {
-        await fetch(`${API_BASE}/api/certifications/${certId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/certifications/${certId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -1232,39 +1320,68 @@ document.getElementById('certificationForm').addEventListener('submit', async fu
     const link = document.getElementById('certLink').value.trim();
     const fileInput = document.getElementById('certFile');
     let fileData = null;
-
-    if (fileInput.files.length > 0) {
-        const reader = new FileReader();
-        fileData = await new Promise((resolve) => {
-            reader.onload = (e) => resolve(e.target.result);
-            reader.readAsDataURL(fileInput.files[0]);
-        });
-    } else if (editId) {
-        const existing = portfolioData.certifications.find(c => c.id == editId);
-        fileData = existing ? existing.file : null;
-    }
-
+    const submit = document.getElementById('certSubmitBtn');
+    const originalLabel = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = 'Saving...';
     try {
-        if (editId) {
-            await fetch(`${API_BASE}/api/certifications/${editId}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ name, issuer, date, description, link, file: fileData })
+        if (fileInput.files.length > 0) {
+            const selected = fileInput.files[0];
+            if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(selected.type)) {
+                throw new Error('Choose a JPG, PNG, WebP image or PDF.');
+            }
+            if (selected.size > 10 * 1024 * 1024) throw new Error('Certificate files must be 10 MB or smaller.');
+            fileData = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Unable to read the certificate file. Please select it again.'));
+                reader.readAsDataURL(selected);
             });
-        } else {
-            await fetch(`${API_BASE}/api/certifications`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ name, issuer, date, description, link, file: fileData })
-            });
+        } else if (editId) {
+            fileData = portfolioData.certifications.find(c => c.id == editId)?.file || null;
+        }
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/certifications${editId ? '/' + editId : ''}`, {
+            method: editId ? 'PUT' : 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name, issuer, date, description, link, file: fileData })
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || `Save failed (HTTP ${response.status}).`);
         }
         await loadData();
         hideAddCertification();
         renderCertificationsList();
         updateDashboard();
-        alert('✅ Certification saved!');
+        alert('Certification saved!');
     } catch (error) {
-        alert('❌ Failed to save: ' + error.message);
+        alert('Failed to save: ' + error.message);
+    } finally {
+        submit.disabled = false;
+        submit.textContent = originalLabel;
+    }
+});
+
+document.getElementById('certFile').addEventListener('change', function() {
+    const preview = document.getElementById('certFilePreview');
+    preview.replaceChildren();
+    const file = this.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+        preview.textContent = 'Choose a JPG, PNG, WebP or PDF up to 10 MB.';
+        this.value = '';
+        return;
+    }
+    if (file.type === 'application/pdf') {
+        preview.textContent = `PDF selected: ${file.name}`;
+    } else {
+        const image = document.createElement('img');
+        const source = URL.createObjectURL(file);
+        image.src = source;
+        image.alt = 'Selected certificate preview';
+        image.style.cssText = 'max-width:100%;max-height:240px;object-fit:contain';
+        image.onload = image.onerror = () => URL.revokeObjectURL(source);
+        preview.append(image);
     }
 });
 
@@ -1325,7 +1442,7 @@ async function editSocial(platform) {
 async function deleteSocial(platform) {
     if (!confirm('Delete this social link?')) return;
     try {
-        await fetch(`${API_BASE}/api/social/${platform}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/social/${platform}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -1351,12 +1468,12 @@ document.getElementById('socialForm').addEventListener('submit', async function(
 
     try {
         if (editPlatform && editPlatform !== platform) {
-            await fetch(`${API_BASE}/api/social/${editPlatform}`, {
+            await PortfolioAPI.fetch(`${API_BASE}/api/social/${editPlatform}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
         }
-        await fetch(`${API_BASE}/api/social`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/social`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ platform, icon, url })
@@ -1398,7 +1515,7 @@ document.getElementById('resumeForm').addEventListener('submit', async function(
         reader.readAsDataURL(fileInput.files[0]);
     });
     portfolioData.personal.resume = fileData;
-    await saveData();
+    try { await saveData(['profile']); } catch (error) { alert('Failed to save: ' + error.message); return; }
     renderResumePreview();
     alert('✅ Resume uploaded!');
 });
@@ -1417,22 +1534,24 @@ function renderWelcomeVideoPreview() {
     }
 }
 
-document.getElementById('welcomeVideoForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('welcomeVideo');
-    if (fileInput.files.length === 0) {
-        alert('Please select a video.');
-        return;
-    }
-    const reader = new FileReader();
-    const videoData = await new Promise((resolve) => {
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(fileInput.files[0]);
-    });
-    portfolioData.videos.welcome = videoData;
-    await saveData();
-    renderWelcomeVideoPreview();
-    alert('✅ Welcome video uploaded!');
+document.getElementById('welcomeVideoForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const file = document.getElementById('welcomeVideo').files[0];
+    if (!file) { alert('Please select a video.'); return; }
+    if (!file.type.startsWith('video/') || file.size > 50 * 1024 * 1024) { alert('Choose a video up to 50 MB.'); return; }
+    const submit = this.querySelector('[type=submit]');
+    submit.disabled = true;
+    try {
+        const form = new FormData(); form.append('image', file);
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, { method: 'POST', headers: getFileUploadHeaders(), body: form });
+        const result = await response.json();
+        if (!result.url) throw new Error(result.error || 'Upload failed.');
+        portfolioData.videos.welcome = result.url;
+        await saveData(['welcome-video']);
+        renderWelcomeVideoPreview();
+        alert('Welcome video uploaded!');
+    } catch (error) { alert('Failed to upload video: ' + error.message); }
+    finally { submit.disabled = false; }
 });
 
 // ============================================
@@ -1441,7 +1560,7 @@ document.getElementById('welcomeVideoForm').addEventListener('submit', async fun
 
 async function loadMessages() {
     try {
-        const response = await fetch(`${API_BASE}/api/messages`, {
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/messages`, {
             headers: getAuthHeaders()
         });
         if (!response.ok) throw new Error('Failed to fetch messages');
@@ -1466,12 +1585,12 @@ async function renderMessages() {
     container.innerHTML = messages.map((msg, i) => `
         <div class="message-item">
             <div class="message-header">
-                <span class="sender"><strong>${msg.name}</strong> (${msg.email})</span>
+                <span class="sender"><strong>${Credentials.escape(msg.name)}</strong> (${Credentials.escape(msg.email)})</span>
                 <span class="date">${new Date(msg.date).toLocaleString()}</span>
             </div>
             <div class="message-body">
-                <p><strong>Subject:</strong> ${msg.subject || 'No subject'}</p>
-                <p>${msg.message}</p>
+                <p><strong>Subject:</strong> ${Credentials.escape(msg.subject || 'No subject')}</p>
+                <p>${Credentials.escape(msg.message)}</p>
             </div>
             <button onclick="deleteMessage(${msg.id})" class="btn-delete" style="margin-top:0.5rem;">Delete</button>
         </div>
@@ -1481,7 +1600,7 @@ async function renderMessages() {
 async function deleteMessage(messageId) {
     if (!confirm('Delete this message?')) return;
     try {
-        await fetch(`${API_BASE}/api/messages/${messageId}`, {
+        await PortfolioAPI.fetch(`${API_BASE}/api/messages/${messageId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
@@ -1500,7 +1619,7 @@ async function deleteMessage(messageId) {
 async function loadAdminChat() {
     const container = document.getElementById('admin-chat-list');
     try {
-        const res = await fetch(`${API_BASE}/api/admin/chat/conversations`, {
+        const res = await PortfolioAPI.fetch(`${API_BASE}/api/admin/chat/conversations`, {
             headers: getAuthHeaders()
         });
         const data = await res.json();
@@ -1512,7 +1631,7 @@ async function loadAdminChat() {
         container.innerHTML = data.conversations.map(conv => `
             <div style="background:var(--bg-card);padding:1rem;border-radius:12px;border:1px solid var(--border-color);margin-bottom:1rem;">
                 <div style="display:flex;justify-content:space-between;">
-                    <strong>Visitor: ${conv.username}</strong>
+                    <strong>Visitor: ${Credentials.escape(conv.username)}</strong>
                     <span>${new Date(conv.last_message_at).toLocaleString()}</span>
                 </div>
                 <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
@@ -1520,9 +1639,9 @@ async function loadAdminChat() {
                     <button onclick="adminReply(${conv.id})" class="btn primary" style="padding:0.3rem 1rem;font-size:0.85rem;">Reply</button>
                 </div>
                 <div style="margin-top:0.5rem;max-height:150px;overflow-y:auto;background:var(--bg-primary);border-radius:8px;padding:0.5rem;">
-                    ${conv.messages.map(msg => `
+                    ${(conv.messages || []).map(msg => `
                         <div style="display:flex;justify-content:space-between;font-size:0.9rem;padding:0.2rem 0;border-bottom:1px solid var(--border-color);">
-                            <span><strong>${msg.sender_type === 'admin' ? 'Admin' : 'Visitor'}:</strong> ${msg.message}</span>
+                            <span><strong>${msg.sender_type === 'admin' ? 'Admin' : 'Visitor'}:</strong> ${Credentials.escape(msg.message)}</span>
                             <span style="font-size:0.7rem;color:var(--text-light);">${new Date(msg.sent_at).toLocaleTimeString()}</span>
                         </div>
                     `).join('')}
@@ -1540,7 +1659,7 @@ async function adminReply(convId) {
     const message = input.value.trim();
     if (!message) return;
     try {
-        const res = await fetch(`${API_BASE}/api/admin/chat/reply`, {
+        const res = await PortfolioAPI.fetch(`${API_BASE}/api/admin/chat/reply`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ conversationId: convId, message })
@@ -1565,7 +1684,7 @@ async function adminReply(convId) {
 async function loadOutMessages() {
     const container = document.getElementById('outMessagesList');
     try {
-        const res = await fetch(`${API_BASE}/api/admin/out-messages`, {
+        const res = await PortfolioAPI.fetch(`${API_BASE}/api/admin/out-messages`, {
             headers: getAuthHeaders()
         });
         const data = await res.json();
@@ -1577,12 +1696,12 @@ async function loadOutMessages() {
         container.innerHTML = data.messages.map(msg => `
             <div class="message-item">
                 <div class="message-header">
-                    <span class="sender"><strong>${msg.name}</strong> (${msg.email})</span>
+                    <span class="sender"><strong>${Credentials.escape(msg.name)}</strong> (${Credentials.escape(msg.email)})</span>
                     <span class="date">${new Date(msg.sent_at).toLocaleString()}</span>
                 </div>
                 <div class="message-body">
-                    <p><strong>Channel:</strong> <span style="text-transform:capitalize;">${msg.channel}</span></p>
-                    <p><strong>Message:</strong> ${msg.message}</p>
+                    <p><strong>Channel:</strong> <span style="text-transform:capitalize;">${Credentials.escape(msg.channel)}</span></p>
+                    <p><strong>Message:</strong> ${Credentials.escape(msg.message)}</p>
                 </div>
                 <button onclick="deleteOutMessage(${msg.id})" class="btn-delete" style="margin-top:0.5rem;">Delete</button>
             </div>
@@ -1596,7 +1715,7 @@ async function loadOutMessages() {
 async function deleteOutMessage(id) {
     if (!confirm('Delete this out message?')) return;
     try {
-        const res = await fetch(`${API_BASE}/api/admin/out-messages/${id}`, {
+        const res = await PortfolioAPI.fetch(`${API_BASE}/api/admin/out-messages/${id}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
