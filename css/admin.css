@@ -470,6 +470,8 @@
 .owner-checklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.7rem; margin-top: 1.2rem; }
 .owner-checklist button { padding: 0.9rem; text-align: left; font: inherit; font-size: 0.8rem; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
 .owner-checklist [data-ready="true"] { color: var(--accent-secondary); border-color: var(--accent-secondary); }
+.existing-project-file { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; padding: 0.7rem; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 0.5rem; overflow-wrap: anywhere; }
+.existing-project-file button { flex-shrink: 0; color: var(--accent-primary); background: transparent; border: 0; padding: 0.5rem; cursor: pointer; text-decoration: underline; }
 
 @media (max-width: 768px) {
     .admin-sidebar { position: sticky; top: 65px; bottom: auto; z-index: 900; width: 100%; display: flex; gap: 0.4rem; padding: 0.65rem 1rem; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--border-color); background: var(--bg-card); scrollbar-width: thin; scrollbar-color: var(--accent-primary) transparent; }

@@ -1,7 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcrypt');
-const { resetPassword } = require('../scripts/recover-admin.cjs');
+const { resetPassword, recoveryErrorMessage, RecoveryInputError } = require('../scripts/recover-admin.cjs');
+
+test('recovery reports actionable input errors without exposing database secrets', () => {
+    assert.equal(recoveryErrorMessage(new RecoveryInputError('Passwords do not match. Nothing changed.')), 'Passwords do not match. Nothing changed.');
+    assert.match(recoveryErrorMessage({ code: '28P01' }), /Database sign-in failed/);
+    assert.match(recoveryErrorMessage({ code: '42P01' }), /users table was not found/);
+    assert.ok(!recoveryErrorMessage(new Error('postgresql://user:private-password@database')).includes('private-password'));
+});
 
 test('owner recovery hashes the replacement password and updates only the named account', async () => {
     let update;

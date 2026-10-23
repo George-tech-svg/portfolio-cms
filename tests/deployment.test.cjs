@@ -38,6 +38,17 @@ test('API client rejects failed writes, preserves status, and does not claim suc
     vm.runInNewContext(fs.readFileSync(path.join(root, 'js/api.js'), 'utf8'), { window, AbortController, setTimeout, clearTimeout });
     await assert.rejects(window.PortfolioAPI.fetch('/api/profile', { method: 'PUT' }), error => error.status === 403 && error.message === 'Expired session');
 });
+
+test('successful content writes notify other tabs and API reads bypass caches', async () => {
+    const requests = [], notifications = [];
+    const window = { localStorage: { setItem(key) { notifications.push(key); } }, fetch: async (url, options) => { requests.push(options); return { ok: true }; } };
+    vm.runInNewContext(fs.readFileSync(path.join(root, 'js/api.js'), 'utf8'), { window, AbortController, setTimeout, clearTimeout });
+    await window.PortfolioAPI.fetch('/api/data');
+    assert.equal(requests[0].cache, 'no-store');
+    await window.PortfolioAPI.fetch('/api/profile', { method: 'PUT', timeoutMs: 180000 });
+    assert.deepEqual(notifications, ['portfolioUpdatedAt']);
+    assert.ok(!('timeoutMs' in requests[1]), 'Client timeout configuration does not leak into fetch options');
+});
 test('service worker excludes API, private pages, and other origins', () => {
     const events = {};
     const self = { location: { origin: 'https://test.example' }, addEventListener(name, callback) { events[name] = callback; } };

@@ -45,6 +45,18 @@ Login now displays invalid credentials separately from server connectivity failu
 
 ## Verification commands
 
+The editor now saves profile and biography together, preserves media on partial project edits, and supports changing project categories and removing attachments. Deploy the updated backend before the frontend because profile editing uses `/api/profile-content`.
+
+To check the real configured services:
+
+```powershell
+npm run check:services
+npm run check:services -- --existing-media
+npm run check:services -- --upload
+```
+
+The first two checks only read data. `--upload` uploads tiny generated image, PDF, and text fixtures, checks their delivery, and deletes those temporary assets. Existing uploads and portfolio records are preserved. Cloudinary must allow public PDF delivery for certificates and CV files; blocked new PDFs now produce an actionable error rather than an unusable saved link.
+
 ```powershell
 npm test
 node tests/portfolio.browser.cjs

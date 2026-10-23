@@ -25,7 +25,9 @@ cloudinary.config({
 // Database connection
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 15000,
+    query_timeout: 30000
 });
 
 
@@ -581,6 +583,7 @@ app.post('/api/visitor-login', async (req, res) => {
 
 // PUBLIC PORTFOLIO DATA
 app.get('/api/data', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     try {
         const profileRes = await query('SELECT * FROM profile ORDER BY id LIMIT 1');
         const profile = profileRes.rows[0] || {};
@@ -842,43 +845,39 @@ app.get('/api/admin/overview', authenticateToken, async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Unable to load your workspace overview.' }); }
 });
 
-// Profile
+// Profile and biography share one transaction when saved from the editor.
+async function persistProfile(run, body) {
+    const { name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer } = body;
+    const check = await run('SELECT id FROM profile ORDER BY id LIMIT 1');
+    if (!check.rowCount) {
+        await run(`INSERT INTO profile (name, title, badge, hero_subtitle, welcome_message, email, profile_image, about_image, resume, footer)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer]);
+    } else {
+        await run(`UPDATE profile SET name=COALESCE($1,name), title=COALESCE($2,title), badge=COALESCE($3,badge), hero_subtitle=COALESCE($4,hero_subtitle), welcome_message=COALESCE($5,welcome_message), email=COALESCE($6,email),
+                   profile_image=COALESCE($7,profile_image), about_image=COALESCE($8,about_image), resume=COALESCE($9,resume), footer=COALESCE($10,footer), updated_at=CURRENT_TIMESTAMP WHERE id=$11`,
+                  [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer, check.rows[0].id]);
+    }
+}
+async function persistAbout(run, paragraphs) {
+    if (!Array.isArray(paragraphs) || paragraphs.some(paragraph => typeof paragraph !== 'string')) {
+        const error = new Error('About content must be a list of paragraphs.'); error.status = 400; throw error;
+    }
+    await run('DELETE FROM about_paragraphs');
+    for (let index = 0; index < paragraphs.length; index++) await run('INSERT INTO about_paragraphs (content, display_order) VALUES ($1, $2)', [paragraphs[index], index + 1]);
+}
 app.put('/api/profile', authenticateToken, async (req, res) => {
-    try {
-        const { name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer } = req.body;
-        const check = await query('SELECT id FROM profile ORDER BY id LIMIT 1');
-        if (check.rowCount === 0) {
-            await query(`INSERT INTO profile (name, title, badge, hero_subtitle, welcome_message, email, profile_image, about_image, resume, footer)
-                         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-                [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer]);
-        } else {
-            await query(`UPDATE profile SET name=$1, title=$2, badge=$3, hero_subtitle=$4, welcome_message=$5, email=$6,
-                         profile_image=$7, about_image=$8, resume=$9, footer=$10, updated_at=CURRENT_TIMESTAMP WHERE id=$11`,
-                [name, title, badge, heroSubtitle, welcomeMessage, email, profileImage, aboutImage, resume, footer, check.rows[0].id]);
-        }
-        res.json({ success: true });
-    } catch (err) {
-        console.error('/api/profile error:', err);
-        res.status(500).json({ error: err.message });
-    }
+    try { await persistProfile(query, req.body); res.json({ success: true }); }
+    catch (error) { res.status(500).json({ error: 'Unable to save the profile. Please try again.' }); }
 });
-
-// About
-app.put('/api/about', authenticateToken, async (req, res) => {
+app.put('/api/profile-content', authenticateToken, async (req, res) => {
     try {
-        const saved = await transaction(async query => {
-            const { paragraphs } = req.body;
-            await query('DELETE FROM about_paragraphs');
-            for (let i = 0; i < (paragraphs || []).length; i++) {
-                await query('INSERT INTO about_paragraphs (content, display_order) VALUES ($1, $2)', [paragraphs[i], i + 1]);
-            }
-            return { success: true };
-        });
-        res.json(saved);
-    } catch (err) {
-        console.error('/api/about error:', err);
-        res.status(500).json({ error: err.message });
-    }
+        await transaction(async run => { await persistProfile(run, req.body.personal || {}); await persistAbout(run, req.body.paragraphs); });
+        res.json({ success: true });
+    } catch (error) { res.status(error.status || 500).json({ error: 'Unable to save the profile and biography. Please try again.' }); }
+});
+app.put('/api/about', authenticateToken, async (req, res) => {
+    try { await transaction(run => persistAbout(run, req.body.paragraphs)); res.json({ success: true }); }
+    catch (error) { res.status(error.status || 500).json({ error: 'Unable to save About content. Please try again.' }); }
 });
 
 // Skills
@@ -959,22 +958,23 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
     try {
         const saved = await transaction(async query => {
             const { id } = req.params;
-            const { title, description, github, demo, readme, images, videos, technologies, files } = req.body;
-            await query('UPDATE projects SET title=$1, description=$2, github=$3, demo=$4, readme=$5 WHERE id=$6',
-                [title, description, github, demo, readme, id]);
-            await query('DELETE FROM project_images WHERE project_id=$1', [id]);
+            const { title, description, github, demo, readme, images, videos, technologies, files, groupId } = req.body;
+            const updated = await query('UPDATE projects SET title=COALESCE($1,title), description=COALESCE($2,description), github=COALESCE($3,github), demo=COALESCE($4,demo), readme=COALESCE($5,readme), group_id=COALESCE($7,group_id) WHERE id=$6',
+                [title, description, github, demo, readme, id, groupId]);
+            if (!updated.rowCount) { const error = new Error('Project not found. Refresh the editor and try again.'); error.status = 404; throw error; }
+            if (images !== undefined) await query('DELETE FROM project_images WHERE project_id=$1', [id]);
             if (images) for (const url of images) await query('INSERT INTO project_images (project_id, url) VALUES ($1,$2)', [id, url]);
-            await query('DELETE FROM project_videos WHERE project_id=$1', [id]);
+            if (videos !== undefined) await query('DELETE FROM project_videos WHERE project_id=$1', [id]);
             if (videos) for (const url of videos) await query('INSERT INTO project_videos (project_id, url) VALUES ($1,$2)', [id, url]);
-            await query('DELETE FROM project_technologies WHERE project_id=$1', [id]);
+            if (technologies !== undefined) await query('DELETE FROM project_technologies WHERE project_id=$1', [id]);
             if (technologies) for (const tech of technologies) await query('INSERT INTO project_technologies (project_id, name) VALUES ($1,$2)', [id, tech]);
-            await query('DELETE FROM project_files WHERE project_id=$1', [id]);
+            if (files !== undefined) await query('DELETE FROM project_files WHERE project_id=$1', [id]);
             if (files) for (const file of files) await query('INSERT INTO project_files (project_id, name, data, size, type) VALUES ($1,$2,$3,$4,$5)',
                 [id, file.name, file.data, file.size, file.type]);
             return { success: true };
         });
         res.json(saved);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
     try {
@@ -1052,8 +1052,11 @@ app.delete('/api/certifications/:id', authenticateToken, async (req, res) => {
 // Social Links
 app.post('/api/social', authenticateToken, async (req, res) => {
     try {
-        const { platform, icon, url } = req.body;
-        await query('INSERT INTO social_links (platform, icon, url) VALUES ($1,$2,$3) ON CONFLICT (platform) DO UPDATE SET url=$3, icon=$2', [platform, icon, url]);
+        const { platform, icon, url, originalPlatform } = req.body;
+        await transaction(async query => {
+            await query('INSERT INTO social_links (platform, icon, url) VALUES ($1,$2,$3) ON CONFLICT (platform) DO UPDATE SET url=$3, icon=$2', [platform, icon, url]);
+            if (originalPlatform && originalPlatform !== platform) await query('DELETE FROM social_links WHERE platform=$1', [originalPlatform]);
+        });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1068,9 +1071,9 @@ app.delete('/api/social/:platform', authenticateToken, async (req, res) => {
 app.put('/api/welcome-video', authenticateToken, async (req, res) => {
     try {
         const { url } = req.body;
-        const check = await query('SELECT id FROM welcome_video LIMIT 1');
+        const check = await query('SELECT id FROM welcome_video ORDER BY id LIMIT 1');
         if (check.rowCount === 0) await query('INSERT INTO welcome_video (url) VALUES ($1)', [url]);
-        else await query('UPDATE welcome_video SET url=$1 WHERE id=1', [url]);
+        else await query('UPDATE welcome_video SET url=$1 WHERE id=$2', [url, check.rows[0].id]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1096,13 +1099,31 @@ app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
 async function uploadCloudinaryFile(file) {
     const isImage = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
     const resourceType = isImage ? 'image' : /^(video|audio)\//.test(file.mimetype) ? 'video' : 'raw';
-    const options = { folder: 'portfolio-media', resource_type: resourceType };
+    const options = { folder: 'portfolio-media', resource_type: resourceType, timeout: 120000 };
     if (resourceType === 'raw') {
         const name = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120);
         options.public_id = `${randomUUID()}-${name}`;
     }
     const source = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-    return cloudinary.uploader.upload(source, options);
+    const result = await cloudinary.uploader.upload(source, options);
+    if (file.mimetype === 'application/pdf') {
+        try {
+            // Verify the same GET request a visitor uses, then release the body.
+            const delivery = await fetch(result.secure_url, { headers: { Range: 'bytes=0-255' }, signal: AbortSignal.timeout(15000) });
+            await delivery.body?.cancel();
+            if (!delivery.ok) {
+                const error = new Error([401, 403].includes(delivery.status)
+                    ? 'Cloudinary is blocking PDF delivery. Enable "Allow delivery of PDF and ZIP files" in Cloudinary Settings > Security, then retry.'
+                    : 'The uploaded PDF is not available for download yet. Please retry.');
+                error.status = 422; error.code = 'PDF_DELIVERY_UNAVAILABLE'; error.deliveryReason = delivery.headers.get('x-cld-error') || `HTTP ${delivery.status}`; throw error;
+            }
+        } catch (error) {
+            // Do not leave a newly uploaded, unusable document in the account.
+            await cloudinary.uploader.destroy(result.public_id, { resource_type: resourceType, timeout: 15000 });
+            throw error;
+        }
+    }
+    return result;
 }
 
 // Upload single file
@@ -1112,7 +1133,7 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
         const result = await uploadCloudinaryFile(req.file);
         res.json({ success: true, url: result.secure_url });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 
@@ -1125,7 +1146,7 @@ app.post('/api/upload-multiple', authenticateToken, upload.array('images', 10), 
             return result.secure_url;
         }));
         res.json({ success: true, urls, count: urls.length });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 // ============================================
@@ -1146,4 +1167,4 @@ async function startServer() {
 if (require.main === module) {
     startServer().catch(error => { console.error('Backend startup failed:', error.message); process.exitCode = 1; pool.end(); });
 }
-module.exports = { app, pool, startServer, setupDatabase };
+module.exports = { app, pool, startServer, setupDatabase, uploadCloudinaryFile };

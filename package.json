@@ -9,7 +9,8 @@
     "build:frontend": "node scripts/build-frontend.cjs",
     "test": "node --test --test-isolation=none tests/*.test.cjs",
     "preview": "node scripts/preview.cjs",
-    "admin:recover": "node scripts/recover-admin.cjs"
+    "admin:recover": "node scripts/recover-admin.cjs",
+    "check:services": "node scripts/check-services.cjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

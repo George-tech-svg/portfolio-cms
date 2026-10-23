@@ -18,10 +18,10 @@ const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAw
 const fixture = {
     personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist', welcomeMessage: 'I turn complex data into useful decisions and build thoughtful digital experiences.', aboutImage: image },
     about: { paragraphs: [Array(80).fill('A thoughtful approach to data, design, and useful software.').join(' ')] },
-    experience: [{ role: 'Data scientist', company: 'Research team', period: '2024?2026', description: Array(60).fill('Built data products and shared findings.').join(' ') }],
-    education: [{ institution: 'University', degree: 'Computer science', description: Array(60).fill('Research, statistics, and software engineering.').join(' ') }],
+    experience: [{ id: 1, role: 'Data scientist', company: 'Research team', period: '2024?2026', description: Array(60).fill('Built data products and shared findings.').join(' ') }],
+    education: [{ id: 1, institution: 'University', degree: 'Computer science', description: Array(60).fill('Research, statistics, and software engineering.').join(' ') }],
     skills: [{ category: 'Data science', items: ['Python', 'SQL', 'Statistics'] }, { category: 'Machine learning', items: ['Scikit-learn', 'PyTorch'] }],
-    projectGroups: [{ id: 1, name: 'Data science', projects: [{ id: 2, title: 'Sample project', images: [image], readme: 'Project explanation', files: [{ name: 'existing.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' }] }] }],
+    projectGroups: [{ id: 1, name: 'Data science', projects: [{ id: 2, title: 'Sample project', description: Array(90).fill('A clear project description with research and useful findings.').join(' '), images: [image], readme: Array(100).fill('Project explanation and supporting details.').join(' '), files: [{ name: 'existing.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' }] }] }],
     certifications: [
         { id: 1, name: 'Image certificate', issuer: 'Test issuer', description: Array(30).fill('Practical data analysis and research.').join(' ') + '<script>inert text</script>', file: image, link: 'https://example.com/verify' },
         { id: 2, name: 'PDF certificate', file: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' },
@@ -34,6 +34,7 @@ localStorage.setItem('token', 'local-test-token');
 window.fixture = ${JSON.stringify(fixture).replace(/</g, '\\u003c')};
 window.failFetch = false;
 window.saveRequests = [];
+window.requestLog = [];
 window.uploadRequests = [];
 window.alerts = [];
 window.alert = message => window.alerts.push(message);
@@ -42,11 +43,19 @@ window.addEventListener('error', event => { if (event.filename?.includes(locatio
 window.addEventListener('unhandledrejection', event => window.browserErrors.push(String(event.reason)));
 window.chatMessages = [];
 window.fetch = async (url, options = {}) => {
+    window.requestLog.push({ url, method: options.method, body: typeof options.body === 'string' ? JSON.parse(options.body) : null });
     if (window.failFetch) throw new Error('Simulated offline');
     if (url.endsWith('/api/upload')) {
+        if (window.pauseUpload) await window.pauseUpload;
         const file = options.body.get('image');
         window.uploadRequests.push(file.name);
         return { ok: true, status: 200, json: async () => ({ success: true, url: 'https://res.cloudinary.com/test/image/upload/' + file.name }) };
+    }
+    if (url.endsWith('/api/upload-multiple')) {
+        if (window.pauseUpload) await window.pauseUpload;
+        if (window.rejectUpload) return { ok: false, status: 500, json: async () => ({ error: 'Test upload failure' }) };
+        const file = options.body.get('images'); window.uploadRequests.push(file.name);
+        return { ok: true, status: 200, json: async () => ({ success: true, urls: ['https://res.cloudinary.com/test/image/upload/' + file.name] }) };
     }
     if (url.endsWith('/api/visitor-login') || url.endsWith('/api/visitor-register')) {
         return { ok: true, status: 200, json: async () => ({ success: true, token: 'test-visitor', username: 'Visitor' }) };
@@ -115,6 +124,89 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         await new Promise(resolve => setTimeout(resolve, 150));
         check(window.saveRequests.at(-1)?.resume === 'https://res.cloudinary.com/test/image/upload/resume.pdf', 'Resume stores its Cloudinary URL');
         check(window.uploadRequests.includes('certificate.png') && window.uploadRequests.includes('notes.txt') && window.uploadRequests.includes('resume.pdf'), 'Certificates, attachments, and resumes all upload to Cloudinary');
+        const originalName = portfolioData.personal.name;
+        document.getElementById('profileName').value = 'Updated owner';
+        document.getElementById('profileBio').value = 'Updated biography';
+        window.rejectSave = true;
+        const profileRequests = () => window.requestLog.filter(request => request.url.endsWith('/api/profile-content'));
+        const beforeProfile = profileRequests().length;
+        document.getElementById('profileForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        document.getElementById('profileForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(profileRequests().length === beforeProfile + 1, 'Repeated submit cannot duplicate profile saves');
+        check(portfolioData.personal.name === originalName, 'Failed profile save restores persisted local state');
+        window.rejectSave = false;
+        document.getElementById('profileForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(profileRequests().at(-1).body.personal.name === 'Updated owner' && profileRequests().at(-1).body.paragraphs[0] === 'Updated biography', 'Profile and biography submit together');
+        const photo = document.getElementById('profilePicture');
+        const originalPhoto = portfolioData.personal.profileImage;
+        const photoTransfer = new DataTransfer(); photoTransfer.items.add(new File(['photo'], 'portrait.png', { type: 'image/png' })); photo.files = photoTransfer.files;
+        window.rejectSave = true; photo.dispatchEvent(new Event('change'));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(portfolioData.personal.profileImage === originalPhoto && !photo.disabled, 'Photo save failure preserves the previous photo and permits retry');
+        window.rejectSave = false;
+
+        window.fixture.projectGroups.push({ id: 3, name: 'Web applications', projects: [] });
+        await editProject(1, 2);
+        document.getElementById('projectGroupSelect').value = '3';
+        document.getElementById('projectGroupSelect').dispatchEvent(new Event('change'));
+        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.saveRequests.at(-1).groupId === '3' && window.saveRequests.at(-1).files.length === 1, 'Moving a project sends its new category and preserves attachments');
+        await editProject(1, 2);
+        document.querySelector('.existing-project-file button').click();
+        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.saveRequests.at(-1).files.length === 0, 'Removed project attachments are omitted from the save');
+
+        showAddProject(1); addImageUploadRow();
+        const imageRow = document.querySelector('#imageUploadContainer > div');
+        const imageTransfer = new DataTransfer(); imageTransfer.items.add(new File(['project image'], 'project.png', { type: 'image/png' }));
+        const imageInput = imageRow.querySelector('input'); imageInput.files = imageTransfer.files;
+        let releaseUpload;
+        window.pauseUpload = new Promise(resolve => { releaseUpload = resolve; });
+        imageInput.dispatchEvent(new Event('change'));
+        const beforeProject = window.saveRequests.length;
+        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        check(window.saveRequests.length === beforeProject && window.alerts.at(-1).includes('wait'), 'Project save waits for pending media instead of dropping it');
+        releaseUpload(); window.pauseUpload = null;
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(imageRow.dataset.uploadState === 'complete', 'Project image upload completes with its saved URL');
+        window.rejectUpload = true; addImageUploadRow();
+        const failedRow = document.querySelector('#imageUploadContainer > div:last-child');
+        failedRow.querySelector('input').files = imageTransfer.files; failedRow.querySelector('input').dispatchEvent(new Event('change'));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        check(failedRow.dataset.uploadState === 'failed' && window.saveRequests.length === beforeProject, 'Failed selected media must be retried or removed before saving');
+        window.rejectUpload = false; failedRow.remove();
+        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.saveRequests.at(-1).images[0]?.endsWith('/project.png'), 'Completed project uploads are included in the save');
+        const originalSkillCategory = portfolioData.skills[0].category;
+        editSkillCategory(0); document.getElementById('skillCategoryName').value = 'Edited skill category';
+        window.rejectSave = true;
+        document.getElementById('skillCategoryForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(portfolioData.skills[0].category === originalSkillCategory && document.getElementById('addSkillCategoryForm').style.display !== 'none', 'Failed skill edits preserve the previous category and keep the form open');
+        window.rejectSave = false;
+        document.getElementById('skillCategoryForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.saveRequests.at(-1).skills[0].category === 'Edited skill category', 'Skill category edits submit successfully after retry');
+        await editExperience(1); document.getElementById('expRole').value = 'Updated role';
+        document.getElementById('experienceForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.requestLog.some(request => request.url.endsWith('/api/experience/1') && request.method === 'PUT' && request.body.role === 'Updated role'), 'Experience edits use the update route');
+        await editEducation(1); document.getElementById('eduDegree').value = 'Updated degree';
+        document.getElementById('educationForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.requestLog.some(request => request.url.endsWith('/api/education/1') && request.method === 'PUT' && request.body.degree === 'Updated degree'), 'Education edits use the update route');
+        editGroup(1); document.getElementById('groupName').value = 'Updated category';
+        document.getElementById('groupForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        check(window.requestLog.some(request => request.url.endsWith('/api/groups/1') && request.method === 'PUT' && request.body.name === 'Updated category'), 'Project category edits use the update route');
     } catch (error) { failures.push(error.stack); }
     failures.push(...window.browserErrors);
     const result = document.createElement('pre');
@@ -207,9 +299,24 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
         document.querySelector('.group-card').click();
         check(location.hash === '#projects/group/1', 'Group has a shareable URL');
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const cardMore = document.querySelector('.project-card .expand-toggle');
+        check(cardMore && !cardMore.hidden, 'Long project card descriptions offer more');
+        cardMore.click();
+        check(cardMore.textContent === 'hide' && location.hash === '#projects/group/1', 'Expanding a project card does not navigate away');
+        cardMore.click();
         document.querySelector('.project-card').click();
         check(location.hash === '#projects/group/1/project/2', 'Project has a shareable URL');
-        check(document.querySelector('.project-gallery img') && document.querySelector('.project-readme')?.textContent === 'Project explanation', 'Project media and write-up render');
+        check(document.querySelector('.project-gallery img') && document.querySelector('.project-readme')?.textContent === window.fixture.projectGroups[0].projects[0].readme, 'Project media and write-up render');
+        await new Promise(resolve => setTimeout(resolve, 50));
+        for (const selector of ['.project-detail-summary .project-description', '.project-readme']) {
+            const copy = document.querySelector(selector), toggle = copy.nextElementSibling;
+            check(toggle && !toggle.hidden && toggle.getAttribute('aria-expanded') === 'false', 'Project detail text starts with a compact preview');
+            toggle.click();
+            check(toggle.textContent === 'hide' && copy.scrollHeight <= copy.clientHeight + 1, 'More reveals the complete project detail');
+            toggle.click();
+            check(toggle.textContent === 'more' && toggle.getAttribute('aria-expanded') === 'false', 'Hide collapses project details again');
+        }
         history.back();
         await new Promise(resolve => setTimeout(resolve, 150));
         check(location.hash === '#projects/group/1' && document.querySelector('.project-card'), 'Browser Back restores group');

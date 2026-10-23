@@ -9,6 +9,20 @@ let portfolioData = {};
 let imageCounter = 0;
 let videoCounter = 0;
 let skillsEditIndex = -1;
+let retainedProjectFiles = [];
+
+function handleFormSubmit(id, handler) {
+    document.getElementById(id).addEventListener('submit', async function(event) {
+        event.preventDefault();
+        if (this.dataset.saving === 'true') return;
+        const submit = this.querySelector('[type="submit"]');
+        this.dataset.saving = 'true';
+        if (submit) submit.disabled = true;
+        try { await handler.call(this, event); }
+        catch (error) { alert('Unable to save: ' + error.message); }
+        finally { this.dataset.saving = 'false'; if (submit) submit.disabled = false; }
+    });
+}
 
 // ============================================
 // CHECK LOGIN & TOKEN
@@ -40,14 +54,17 @@ function getFileUploadHeaders() {
 
 // All new media is uploaded through the authenticated backend to Cloudinary.
 // PostgreSQL receives the returned URL and descriptive metadata only.
+const uploadedMedia = new WeakMap();
 async function uploadMedia(file) {
+    if (uploadedMedia.has(file)) return uploadedMedia.get(file);
     const form = new FormData();
     form.append('image', file);
     const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
-        method: 'POST', headers: getFileUploadHeaders(), body: form
+        method: 'POST', headers: getFileUploadHeaders(), body: form, timeoutMs: 180000
     });
     const result = await response.json();
     if (!result.success || !result.url) throw new Error(result.error || 'Media upload failed.');
+    uploadedMedia.set(file, result.url);
     return result.url;
 }
 
@@ -99,28 +116,14 @@ async function saveData(sections = ['profile', 'about']) {
     try {
         const headers = getAuthHeaders();
 
-        if (sections.includes('profile')) await PortfolioAPI.fetch(`${API_BASE}/api/profile`, {
-            method: 'PUT',
-            headers: headers,
-            body: JSON.stringify({
-                name: portfolioData.personal?.name || '',
-                title: portfolioData.personal?.title || '',
-                badge: portfolioData.personal?.badge || '',
-                heroSubtitle: portfolioData.personal?.heroSubtitle || '',
-                welcomeMessage: portfolioData.personal?.welcomeMessage || '',
-                email: portfolioData.personal?.email || '',
-                profileImage: portfolioData.personal?.profileImage || '',
-                aboutImage: portfolioData.personal?.aboutImage || '',
-                resume: portfolioData.personal?.resume || '',
-                footer: portfolioData.footer || ''
-            })
-        });
-
-        if (sections.includes('about')) await PortfolioAPI.fetch(`${API_BASE}/api/about`, {
-            method: 'PUT',
-            headers: headers,
-            body: JSON.stringify({ paragraphs: portfolioData.about?.paragraphs || [] })
-        });
+        const profile = { ...portfolioData.personal, footer: portfolioData.footer || '' };
+        const paragraphs = portfolioData.about?.paragraphs || [];
+        if (sections.includes('profile') && sections.includes('about')) {
+            await PortfolioAPI.fetch(`${API_BASE}/api/profile-content`, { method: 'PUT', headers, body: JSON.stringify({ personal: profile, paragraphs }) });
+        } else {
+            if (sections.includes('profile')) await PortfolioAPI.fetch(`${API_BASE}/api/profile`, { method: 'PUT', headers, body: JSON.stringify(profile) });
+            if (sections.includes('about')) await PortfolioAPI.fetch(`${API_BASE}/api/about`, { method: 'PUT', headers, body: JSON.stringify({ paragraphs }) });
+        }
 
         if (sections.includes('skills')) await PortfolioAPI.fetch(`${API_BASE}/api/skills`, {
             method: 'PUT',
@@ -289,13 +292,13 @@ function renderProfileForm() {
     document.getElementById('profileBio').value = bio;
 
     if (p.profileImage && p.profileImage.startsWith('http')) {
-        document.getElementById('profilePicturePreview').innerHTML = `<img src="${p.profileImage}" style="width:150px;height:150px;border-radius:50%;object-fit:cover;">`;
+        document.getElementById('profilePicturePreview').innerHTML = `<img src="${Credentials.escape(Credentials.url(p.profileImage, true))}" style="width:150px;height:150px;border-radius:50%;object-fit:cover;">`;
     } else {
         document.getElementById('profilePicturePreview').innerHTML = '<p style="color:var(--text-light);">No profile image uploaded</p>';
     }
 
     if (p.aboutImage && p.aboutImage.startsWith('http')) {
-        document.getElementById('aboutImagePreview').innerHTML = `<img src="${p.aboutImage}" style="max-width:200px;max-height:150px;object-fit:cover;border-radius:12px;">`;
+        document.getElementById('aboutImagePreview').innerHTML = `<img src="${Credentials.escape(Credentials.url(p.aboutImage, true))}" style="max-width:200px;max-height:150px;object-fit:cover;border-radius:12px;">`;
     } else {
         document.getElementById('aboutImagePreview').innerHTML = '<p style="color:var(--text-light);">No about image uploaded</p>';
     }
@@ -305,10 +308,12 @@ function renderProfileForm() {
 // PROFILE SAVE
 // ============================================
 
-document.getElementById('profileForm').addEventListener('submit', async function(e) {
+handleFormSubmit('profileForm', async function(e) {
     e.preventDefault();
 
-    const p = portfolioData.personal || {};
+    const previousPersonal = portfolioData.personal;
+    const previousAbout = portfolioData.about;
+    const p = { ...portfolioData.personal };
     p.name = document.getElementById('profileName').value.trim();
     p.title = document.getElementById('profileTitle').value.trim();
     p.badge = document.getElementById('profileBadge').value.trim();
@@ -322,7 +327,7 @@ document.getElementById('profileForm').addEventListener('submit', async function
         paragraphs: bioText ? bioText.split('\n\n').filter(p => p.trim()) : []
     };
 
-    try { await saveData(); } catch (error) { alert('Failed to save: ' + error.message); return; }
+    try { await saveData(); } catch (error) { portfolioData.personal = previousPersonal; portfolioData.about = previousAbout; alert('Failed to save: ' + error.message); return; }
     alert('✅ Profile saved!');
     renderProfileForm();
     updateDashboard();
@@ -332,79 +337,28 @@ document.getElementById('profileForm').addEventListener('submit', async function
 // PROFILE PICTURE UPLOAD
 // ============================================
 
-document.getElementById('profilePicture').addEventListener('change', async function(e) {
-    const file = this.files[0];
-    if (!file) return;
+async function savePersonalField(field, value) {
+    await PortfolioAPI.fetch(`${API_BASE}/api/profile`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ [field]: value }) });
+    portfolioData.personal[field] = value;
+}
 
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
-            method: 'POST',
-            headers: getFileUploadHeaders(),
-            body: formData
-        });
-        const result = await response.json();
-
-        if (result.success && result.url) {
-            portfolioData.personal.profileImage = result.url;
-            await saveData(['profile']);
-
-            const img = document.createElement('img');
-            img.src = result.url;
-            img.style.cssText = 'width:150px;height:150px;border-radius:50%;object-fit:cover;';
-            document.getElementById('profilePicturePreview').innerHTML = '';
-            document.getElementById('profilePicturePreview').appendChild(img);
-
-            alert('✅ Profile picture uploaded to Cloudinary and saved!');
-        } else {
-            alert('Upload failed: ' + (result.error || 'Unknown error'));
-        }
-    } catch (error) {
-        console.error('Upload error:', error);
-        alert('Error uploading to Cloudinary.');
-    }
-});
-
-// ============================================
-// ABOUT IMAGE UPLOAD
-// ============================================
-
-document.getElementById('aboutImage').addEventListener('change', async function(e) {
-    const file = this.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, {
-            method: 'POST',
-            headers: getFileUploadHeaders(),
-            body: formData
-        });
-        const result = await response.json();
-
-        if (result.success && result.url) {
-            portfolioData.personal.aboutImage = result.url;
-            await saveData(['profile']);
-
-            const img = document.createElement('img');
-            img.src = result.url;
-            img.style.cssText = 'max-width:200px;max-height:150px;object-fit:cover;border-radius:12px;';
-            document.getElementById('aboutImagePreview').innerHTML = '';
-            document.getElementById('aboutImagePreview').appendChild(img);
-
-            alert('✅ About image uploaded to Cloudinary and saved!');
-        } else {
-            alert('Upload failed: ' + (result.error || 'Unknown error'));
-        }
-    } catch (error) {
-        console.error('Upload error:', error);
-        alert('Error uploading to Cloudinary.');
-    }
-});
+for (const [inputId, field, previewId] of [['profilePicture', 'profileImage', 'profilePicturePreview'], ['aboutImage', 'aboutImage', 'aboutImagePreview']]) {
+    document.getElementById(inputId).addEventListener('change', async function() {
+        const file = this.files[0];
+        if (!file) return;
+        this.disabled = true;
+        try {
+            if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error('Choose a JPG, PNG, WebP or GIF image up to 10 MB.');
+            const url = await uploadMedia(file);
+            await savePersonalField(field, url);
+            const image = document.createElement('img'); image.src = url; image.alt = 'Saved profile photo'; image.style.cssText = 'max-width:200px;max-height:150px;object-fit:cover;border-radius:12px';
+            document.getElementById(previewId).replaceChildren(image);
+            this.value = '';
+            alert('Photo uploaded to Cloudinary and saved!');
+        } catch (error) { alert('Failed to save photo: ' + error.message); }
+        finally { this.disabled = false; }
+    });
+}
 
 // ============================================
 // SKILLS MANAGEMENT
@@ -423,7 +377,7 @@ function renderSkillsList() {
         <div style="background:var(--bg-card);padding:1.5rem;border-radius:16px;border:1px solid var(--border-color);margin-bottom:1.5rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
                 <div>
-                    <h3><i class="${skill.icon || 'fas fa-code'}"></i> ${skill.category}</h3>
+                    <h3><i class="${Credentials.escape(skill.icon || 'fas fa-code')}"></i> ${Credentials.escape(skill.category)}</h3>
                 </div>
                 <div style="display:flex;gap:0.5rem;">
                     <button onclick="editSkillCategory(${index})" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -472,78 +426,57 @@ function editSkillCategory(index) {
     document.getElementById('addSkillCategoryForm').scrollIntoView({ behavior: 'smooth' });
 }
 
-function deleteSkillCategory(index) {
-    if (!confirm('Delete this skill category and all its skills?')) return;
-    portfolioData.skills.splice(index, 1);
-    renderSkillsList();
-    saveData(['skills']).then(() => {
-        alert('Category deleted and changes saved.');
-    }).catch(error => alert('Failed to save: ' + error.message));
+let skillsSaving = false;
+async function mutateSkills(change) {
+    if (skillsSaving) { alert('Please wait for the current skill update to finish.'); return false; }
+    skillsSaving = true;
+    const previous = portfolioData.skills;
+    portfolioData.skills = structuredClone(previous);
+    try {
+        change(portfolioData.skills);
+        await saveData(['skills']);
+        renderSkillsList();
+        return true;
+    } catch (error) {
+        portfolioData.skills = previous;
+        alert('Failed to save skills: ' + error.message);
+        return false;
+    } finally { skillsSaving = false; }
 }
 
-document.getElementById('skillCategoryForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const editIndex = parseInt(document.getElementById('skillCategoryEditIndex').value);
+async function deleteSkillCategory(index) {
+    if (!confirm('Delete this skill category and all its skills?')) return;
+    if (await mutateSkills(skills => skills.splice(index, 1))) alert('Category deleted and changes saved.');
+}
+
+handleFormSubmit('skillCategoryForm', async function(event) {
+    const index = Number(document.getElementById('skillCategoryEditIndex').value);
     const category = document.getElementById('skillCategoryName').value.trim();
     const icon = document.getElementById('skillCategoryIcon').value.trim() || 'fas fa-code';
-
-    if (!category) {
-        alert('Category name is required.');
-        return;
-    }
-
-    if (editIndex >= 0) {
-        if (portfolioData.skills[editIndex]) {
-            portfolioData.skills[editIndex].category = category;
-            portfolioData.skills[editIndex].icon = icon;
-        }
-    } else {
-        portfolioData.skills.push({ category, icon, items: [] });
-    }
-
-    hideAddSkillCategory();
-    renderSkillsList();
-    saveData(['skills']).then(() => {
-        alert('✅ Category saved successfully!');
-    }).catch(error => alert('Failed to save: ' + error.message));
+    if (!category) { alert('Category name is required.'); return; }
+    const saved = await mutateSkills(skills => {
+        if (index >= 0 && skills[index]) Object.assign(skills[index], { category, icon });
+        else skills.push({ category, icon, items: [] });
+    });
+    if (saved) { hideAddSkillCategory(); alert('Category saved successfully!'); }
 });
 
-function addSkillItem(index) {
+async function addSkillItem(index) {
     const input = document.getElementById(`newSkill_${index}`);
-    const skillName = input.value.trim();
-    if (!skillName) {
-        alert('Please enter a skill name.');
-        return;
-    }
+    const name = input.value.trim();
+    if (!name) { alert('Please enter a skill name.'); return; }
     if (!portfolioData.skills[index]) return;
-    if (!portfolioData.skills[index].items) portfolioData.skills[index].items = [];
-    portfolioData.skills[index].items.push(skillName);
-    input.value = '';
-    renderSkillsList();
-    saveData(['skills']).then(() => {
-        console.log('✅ Skill added and saved.');
-    }).catch(error => alert('Failed to save: ' + error.message));
+    await mutateSkills(skills => { skills[index].items ||= []; skills[index].items.push(name); });
 }
 
-function deleteSkillItem(categoryIndex, itemIndex) {
-    if (!confirm('Remove this skill?')) return;
-    if (portfolioData.skills[categoryIndex] && portfolioData.skills[categoryIndex].items) {
-        portfolioData.skills[categoryIndex].items.splice(itemIndex, 1);
-        renderSkillsList();
-        saveData(['skills']).then(() => {
-            console.log('✅ Skill removed and saved.');
-        }).catch(error => alert('Failed to save: ' + error.message));
-    }
+async function deleteSkillItem(categoryIndex, itemIndex) {
+    if (!confirm('Remove this skill?') || !portfolioData.skills[categoryIndex]) return;
+    await mutateSkills(skills => skills[categoryIndex].items.splice(itemIndex, 1));
 }
 
 async function saveSkills() {
-    try { await saveData(['skills']); } catch (error) { alert('Failed to save: ' + error.message); return; }
-    alert('✅ All skills saved successfully!');
+    if (await mutateSkills(() => {})) alert('All skills saved successfully!');
 }
-
-// ============================================
-// PROJECT GROUPS & PROJECTS
-// ============================================
 
 function renderGroupsList() {
     const container = document.getElementById('groupsList');
@@ -558,8 +491,8 @@ function renderGroupsList() {
         <div style="background:var(--bg-card);padding:1.5rem;border-radius:16px;border:1px solid var(--border-color);margin-bottom:1.5rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
                 <div>
-                    <h3><i class="${group.icon || 'fas fa-folder'}"></i> ${group.name}</h3>
-                    <p style="color:var(--text-secondary);font-size:0.9rem;">${group.description || ''}</p>
+                    <h3><i class="${Credentials.escape(group.icon || 'fas fa-folder')}"></i> ${Credentials.escape(group.name)}</h3>
+                    <p style="color:var(--text-secondary);font-size:0.9rem;">${Credentials.escape(group.description || '')}</p>
                 </div>
                 <div style="display:flex;gap:0.5rem;">
                     <button onclick="editGroup('${groupId}')" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -574,9 +507,9 @@ function renderGroupsList() {
                         return `
                         <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-primary);padding:0.8rem 1rem;border-radius:8px;border:1px solid var(--border-color);">
                             <div>
-                                <strong>${project.title}</strong>
+                                <strong>${Credentials.escape(project.title)}</strong>
                                 <span style="color:var(--text-light);font-size:0.8rem;margin-left:0.5rem;">
-                                    ${project.technologies ? project.technologies.join(', ') : ''}
+                                    ${Credentials.escape(project.technologies ? project.technologies.join(', ') : '')}
                                 </span>
                             </div>
                             <div style="display:flex;gap:0.5rem;">
@@ -640,7 +573,7 @@ async function deleteGroup(groupId) {
     }
 }
 
-document.getElementById('groupForm').addEventListener('submit', async function(e) {
+handleFormSubmit('groupForm', async function(e) {
     e.preventDefault();
     const editId = document.getElementById('groupEditId').value;
     const name = document.getElementById('groupName').value.trim();
@@ -685,6 +618,7 @@ function showAddProject(groupId) {
     } else {
         document.getElementById('selectedGroupDisplay').style.display = 'none';
         document.getElementById('projectGroupId').value = '';
+        document.getElementById('projectGroupSelect').value = '';
     }
     document.getElementById('addProjectForm').style.display = 'block';
     document.getElementById('projectFormTitle').textContent = '📄 Add New Project';
@@ -700,10 +634,24 @@ function showAddProject(groupId) {
     document.getElementById('videoUploadContainer').innerHTML = '';
     document.getElementById('projectFiles').value = '';
     document.getElementById('projectFilesPreview').innerHTML = '';
+    retainedProjectFiles = [];
     imageCounter = 0;
     videoCounter = 0;
     document.getElementById('addProjectForm').scrollIntoView({ behavior: 'smooth' });
     updateGroupSelect();
+}
+
+function renderProjectFilePreviews() {
+    const preview = document.getElementById('projectFilesPreview');
+    preview.replaceChildren();
+    retainedProjectFiles.forEach((file, index) => {
+        const row = document.createElement('div'); row.className = 'existing-project-file';
+        const name = document.createElement('span'); name.textContent = file.name || 'Project attachment';
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-link'; remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${file.name || 'attachment'}`);
+        remove.addEventListener('click', () => { retainedProjectFiles.splice(index, 1); renderProjectFilePreviews(); });
+        row.append(name, remove); preview.append(row);
+    });
 }
 
 function hideAddProject() {
@@ -743,11 +691,8 @@ async function editProject(groupId, projectId) {
     videos.forEach(url => addVideoPreview(url));
 
     document.getElementById('projectFiles').value = '';
-    const filesPreview = document.getElementById('projectFilesPreview');
-    filesPreview.innerHTML = '';
-    (project.files || []).forEach(f => {
-        filesPreview.innerHTML += `<span style="display:inline-block;background:var(--bg-primary);padding:0.3rem 0.8rem;border-radius:50px;font-size:0.8rem;border:1px solid var(--border-color);">📎 ${Credentials.escape(f.name)}</span>`;
-    });
+    retainedProjectFiles = [...(project.files || [])];
+    renderProjectFilePreviews();
 
     document.getElementById('addProjectForm').scrollIntoView({ behavior: 'smooth' });
     updateGroupSelect();
@@ -883,6 +828,9 @@ async function uploadFile(fileInput, previewDiv, type) {
     let btn = row ? row.querySelector('.btn-upload-image, .btn-upload-video') : null;
     if (!btn) btn = row ? row.querySelector('button') : null;
 
+    if (!file.type.startsWith(type + '/') || file.size > (type === 'image' ? 10 : 50) * 1024 * 1024) { alert(`Choose a ${type} up to ${type === 'image' ? 10 : 50} MB.`); return; }
+    if (row?.dataset.uploadState === 'pending') return;
+    if (row) row.dataset.uploadState = 'pending';
     const originalText = btn ? btn.innerHTML : 'Upload';
     if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
 
@@ -893,29 +841,31 @@ async function uploadFile(fileInput, previewDiv, type) {
         const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload-multiple`, {
             method: 'POST',
             headers: getFileUploadHeaders(),
-            body: formData
+            body: formData, timeoutMs: 180000
         });
         const result = await response.json();
         if (result.success && result.urls && result.urls.length > 0) {
             const url = result.urls[0];
-            if (row) row.dataset.uploadedUrl = url;
+            if (row) { row.dataset.uploadedUrl = url; row.dataset.uploadState = 'complete'; }
             if (previewDiv) {
                 if (type === 'image') {
-                    previewDiv.innerHTML = `<img src="${url}" style="max-width:80px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);">`;
+                    previewDiv.innerHTML = `<img src="${Credentials.escape(Credentials.url(url, true))}" style="max-width:80px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);">`;
                 } else {
-                    previewDiv.innerHTML = `<video src="${url}" style="max-width:100px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);" controls></video>`;
+                    previewDiv.innerHTML = `<video src="${Credentials.escape(Credentials.url(url, true))}" style="max-width:100px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);" controls></video>`;
                 }
             }
             if (fileInput) fileInput.style.display = 'none';
             if (btn) { btn.innerHTML = '✅ Uploaded'; btn.disabled = true; }
             alert('✅ Upload successful!');
         } else {
+            if (row) row.dataset.uploadState = 'failed';
             alert('❌ Upload failed: ' + (result.error || 'Unknown error'));
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
         }
     } catch (error) {
         console.error('Upload error:', error);
-        alert('❌ Error connecting to server.');
+        if (row) row.dataset.uploadState = 'failed';
+        alert('Upload failed: ' + error.message);
         if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
     }
 }
@@ -927,8 +877,8 @@ function addImagePreview(url) {
     row.id = rowId;
     row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;';
     row.innerHTML = `
-        <img src="${url}" style="max-width:80px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);">
-        <input type="hidden" value="${url}" class="existing-image-url">
+        <img src="${Credentials.escape(Credentials.url(url, true))}" style="max-width:80px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);">
+        <input type="hidden" value="${Credentials.escape(Credentials.url(url, true))}" class="existing-image-url">
         <button type="button" class="btn-remove-preview" style="background:#ef4444;color:white;border:none;padding:0.3rem 0.8rem;border-radius:50px;cursor:pointer;font-size:0.85rem;">
             <i class="fas fa-times"></i> Remove
         </button>
@@ -946,8 +896,8 @@ function addVideoPreview(url) {
     row.id = rowId;
     row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;';
     row.innerHTML = `
-        <video src="${url}" style="max-width:100px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);" controls></video>
-        <input type="hidden" value="${url}" class="existing-video-url">
+        <video src="${Credentials.escape(Credentials.url(url, true))}" style="max-width:100px;max-height:80px;border-radius:8px;border:2px solid var(--accent-primary);" controls></video>
+        <input type="hidden" value="${Credentials.escape(Credentials.url(url, true))}" class="existing-video-url">
         <button type="button" class="btn-remove-preview" style="background:#ef4444;color:white;border:none;padding:0.3rem 0.8rem;border-radius:50px;cursor:pointer;font-size:0.85rem;">
             <i class="fas fa-times"></i> Remove
         </button>
@@ -962,7 +912,7 @@ function addVideoPreview(url) {
 // SAVE PROJECT
 // ============================================
 
-document.getElementById('projectForm').addEventListener('submit', async function(e) {
+handleFormSubmit('projectForm', async function(e) {
     e.preventDefault();
 
     const groupId = document.getElementById('projectGroupId').value;
@@ -970,6 +920,10 @@ document.getElementById('projectForm').addEventListener('submit', async function
         alert('Please select a group.');
         return;
     }
+
+    const rows = [...document.querySelectorAll('#imageUploadContainer > div, #videoUploadContainer > div')];
+    if (rows.some(row => row.dataset.uploadState === 'pending')) { alert('Please wait for project media uploads to finish, then save.'); return; }
+    if (rows.some(row => row.querySelector('input[type="file"]')?.files.length && !row.dataset.uploadedUrl)) { alert('A selected photo or video has not uploaded. Retry the upload or remove its row before saving.'); return; }
 
     const projectId = document.getElementById('projectEditId').value;
     const title = document.getElementById('projectTitle').value.trim();
@@ -1008,15 +962,10 @@ document.getElementById('projectForm').addEventListener('submit', async function
             }
         }
 
-        if (projectId) {
-            const group = portfolioData.projectGroups.find(g => g.id == groupId);
-            const existingProject = group?.projects?.find(p => p.id == projectId);
-            if (existingProject && existingProject.files) {
-                files.unshift(...existingProject.files);
-            }
-        }
+        files.unshift(...retainedProjectFiles);
 
         const projectData = {
+            groupId,
             title,
             description,
             github,
@@ -1065,9 +1014,9 @@ function renderExperienceList() {
     container.innerHTML = exps.map((exp, i) => `
         <div class="admin-item">
             <div class="item-info">
-                <h4>${exp.role} at ${exp.company}</h4>
-                <p>${exp.period}</p>
-                <p style="color:var(--text-secondary);font-size:0.9rem;">${exp.description}</p>
+                <h4>${Credentials.escape(exp.role)} at ${Credentials.escape(exp.company)}</h4>
+                <p>${Credentials.escape(exp.period)}</p>
+                <p style="color:var(--text-secondary);font-size:0.9rem;">${Credentials.escape(exp.description)}</p>
             </div>
             <div class="item-actions">
                 <button onclick="editExperience('${exp.id}')" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -1123,7 +1072,7 @@ async function deleteExperience(expId) {
     }
 }
 
-document.getElementById('experienceForm').addEventListener('submit', async function(e) {
+handleFormSubmit('experienceForm', async function(e) {
     e.preventDefault();
     const editId = document.getElementById('expEditId').value;
     const company = document.getElementById('expCompany').value.trim();
@@ -1169,10 +1118,10 @@ function renderEducationList() {
     container.innerHTML = edu.map((item, i) => `
         <div class="admin-item">
             <div class="item-info">
-                <h4>${item.institution}</h4>
-                <p><strong>${item.degree}</strong> ${item.field ? 'in ' + item.field : ''}</p>
-                <p style="color:var(--text-light);font-size:0.85rem;">${item.period}</p>
-                ${item.description ? `<p style="color:var(--text-secondary);font-size:0.9rem;">${item.description}</p>` : ''}
+                <h4>${Credentials.escape(item.institution)}</h4>
+                <p><strong>${Credentials.escape(item.degree)}</strong> ${item.field ? 'in ' + item.field : ''}</p>
+                <p style="color:var(--text-light);font-size:0.85rem;">${Credentials.escape(item.period)}</p>
+                ${item.description ? `<p style="color:var(--text-secondary);font-size:0.9rem;">${Credentials.escape(item.description)}</p>` : ''}
             </div>
             <div class="item-actions">
                 <button onclick="editEducation('${item.id}')" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -1230,7 +1179,7 @@ async function deleteEducation(eduId) {
     }
 }
 
-document.getElementById('educationForm').addEventListener('submit', async function(e) {
+handleFormSubmit('educationForm', async function(e) {
     e.preventDefault();
     const editId = document.getElementById('eduEditId').value;
     const institution = document.getElementById('eduInstitution').value.trim();
@@ -1346,7 +1295,7 @@ async function deleteCertification(certId) {
     }
 }
 
-document.getElementById('certificationForm').addEventListener('submit', async function(e) {
+handleFormSubmit('certificationForm', async function(e) {
     e.preventDefault();
     const editId = document.getElementById('certEditId').value;
     const name = document.getElementById('certName').value.trim();
@@ -1432,7 +1381,7 @@ function renderSocialList() {
         <div class="admin-item">
             <div class="item-info">
                 <h4><i class="fab fa-${key}"></i> ${key.charAt(0).toUpperCase() + key.slice(1)}</h4>
-                <p style="color:var(--text-secondary);font-size:0.9rem;">${value}</p>
+                <p style="color:var(--text-secondary);font-size:0.9rem;">${Credentials.escape(value)}</p>
             </div>
             <div class="item-actions">
                 <button onclick="editSocial('${key}')" class="btn-edit"><i class="fas fa-edit"></i></button>
@@ -1486,7 +1435,7 @@ async function deleteSocial(platform) {
     }
 }
 
-document.getElementById('socialForm').addEventListener('submit', async function(e) {
+handleFormSubmit('socialForm', async function(e) {
     e.preventDefault();
     const editPlatform = document.getElementById('socialEditPlatform').value;
     const platform = document.getElementById('socialPlatform').value.trim();
@@ -1498,16 +1447,10 @@ document.getElementById('socialForm').addEventListener('submit', async function(
     }
 
     try {
-        if (editPlatform && editPlatform !== platform) {
-            await PortfolioAPI.fetch(`${API_BASE}/api/social/${editPlatform}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-        }
         await PortfolioAPI.fetch(`${API_BASE}/api/social`, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ platform, icon, url })
+            body: JSON.stringify({ platform, icon, url, originalPlatform: editPlatform })
         });
         await loadData();
         hideAddSocial();
@@ -1527,13 +1470,13 @@ function renderResumePreview() {
     const resume = portfolioData.personal?.resume;
     const preview = document.getElementById('resumePreview');
     if (resume) {
-        preview.innerHTML = `<a href="${resume}" target="_blank" style="color:var(--accent-primary);">📄 View Resume</a>`;
+        preview.innerHTML = `<a href="${Credentials.escape(Credentials.url(resume, true))}" target="_blank" style="color:var(--accent-primary);">📄 View Resume</a>`;
     } else {
         preview.innerHTML = '';
     }
 }
 
-document.getElementById('resumeForm').addEventListener('submit', async function(event) {
+handleFormSubmit('resumeForm', async function(event) {
     event.preventDefault();
     const file = document.getElementById('resumeFile').files[0];
     if (!file) { alert('Please select a PDF file.'); return; }
@@ -1541,8 +1484,7 @@ document.getElementById('resumeForm').addEventListener('submit', async function(
     const submit = this.querySelector('[type=submit]');
     submit.disabled = true;
     try {
-        portfolioData.personal.resume = await uploadMedia(file);
-        await saveData(['profile']);
+        await savePersonalField('resume', await uploadMedia(file));
         renderResumePreview();
         alert('Resume uploaded to Cloudinary and saved!');
     } catch (error) { alert('Failed to save resume: ' + error.message); }
@@ -1557,13 +1499,13 @@ function renderWelcomeVideoPreview() {
     const video = portfolioData.videos?.welcome;
     const preview = document.getElementById('welcomeVideoPreview');
     if (video) {
-        preview.innerHTML = `<video controls style="max-width:300px;max-height:200px;border-radius:12px;border:2px solid var(--border-color);"><source src="${video}"></video>`;
+        preview.innerHTML = `<video controls style="max-width:300px;max-height:200px;border-radius:12px;border:2px solid var(--border-color);"><source src="${Credentials.escape(Credentials.mediaURL(video))}"></video>`;
     } else {
         preview.innerHTML = '';
     }
 }
 
-document.getElementById('welcomeVideoForm').addEventListener('submit', async function(event) {
+handleFormSubmit('welcomeVideoForm', async function(event) {
     event.preventDefault();
     const file = document.getElementById('welcomeVideo').files[0];
     if (!file) { alert('Please select a video.'); return; }
@@ -1572,11 +1514,11 @@ document.getElementById('welcomeVideoForm').addEventListener('submit', async fun
     submit.disabled = true;
     try {
         const form = new FormData(); form.append('image', file);
-        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, { method: 'POST', headers: getFileUploadHeaders(), body: form });
+        const response = await PortfolioAPI.fetch(`${API_BASE}/api/upload`, { method: 'POST', headers: getFileUploadHeaders(), body: form, timeoutMs: 180000 });
         const result = await response.json();
         if (!result.url) throw new Error(result.error || 'Upload failed.');
+        await PortfolioAPI.fetch(`${API_BASE}/api/welcome-video`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ url: result.url }) });
         portfolioData.videos.welcome = result.url;
-        await saveData(['welcome-video']);
         renderWelcomeVideoPreview();
         alert('Welcome video uploaded!');
     } catch (error) { alert('Failed to upload video: ' + error.message); }

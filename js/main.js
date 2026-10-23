@@ -71,6 +71,7 @@ async function loadPublicData() {
 
 function renderPublicPortfolio() {
     expandableObserver.disconnect();
+    expandableNodes.clear();
     document.querySelectorAll('.expand-toggle').forEach(button => button.remove());
     console.log('Rendering portfolio...');
     const data = portfolioData;
@@ -285,6 +286,7 @@ function renderProjectGroups(data) {
 // ============================================
 
 let expandableId = 0;
+const expandableNodes = new Set();
 const expandableObserver = new ResizeObserver(entries => {
     for (const { target } of entries) {
         const button = target.nextElementSibling;
@@ -296,6 +298,10 @@ const expandableObserver = new ResizeObserver(entries => {
 
 function makeExpandable(content, lines, label = 'description') {
     if (!content || !content.textContent.trim()) return;
+    for (const node of expandableNodes) {
+        if (!node.isConnected) { expandableObserver.unobserve(node); expandableNodes.delete(node); }
+    }
+    if (content.nextElementSibling?.classList.contains('expand-toggle')) content.nextElementSibling.remove();
     content.classList.add('expandable-copy');
     content.classList.remove('is-expanded');
     content.style.setProperty('--preview-lines', lines);
@@ -308,7 +314,8 @@ function makeExpandable(content, lines, label = 'description') {
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('aria-label', `Show more: ${label}`);
     content.after(button);
-    button.addEventListener('click', () => {
+    button.addEventListener('click', event => {
+        event.stopPropagation();
         const expanded = button.getAttribute('aria-expanded') !== 'true';
         content.classList.toggle('is-expanded', expanded);
         button.setAttribute('aria-expanded', String(expanded));
@@ -317,6 +324,7 @@ function makeExpandable(content, lines, label = 'description') {
     });
     // Release removed nodes when content is refreshed from the API.
     expandableObserver.observe(content);
+    expandableNodes.add(content);
     requestAnimationFrame(() => { button.hidden = content.scrollHeight <= content.clientHeight + 1; });
 }
 
@@ -625,20 +633,20 @@ function showGroup(groupId, navigate = true) {
     }
 
     container.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;margin-bottom:2rem;">
+        <div class="project-section-heading" style="grid-column:1/-1;text-align:center;margin-bottom:2rem;">
             <button onclick="showGroups()" class="btn secondary" style="margin-bottom:1rem;">
                 <i class="fas fa-arrow-left"></i> Back to Groups
             </button>
-            <h2 style="font-size:2.5rem;font-weight:800;">
+            <h2>
                 <i class="${Credentials.escape(group.icon || 'fas fa-folder')}" style="color:var(--accent-primary);"></i>
                 ${Credentials.escape(group.name)}
             </h2>
-            <p style="color:var(--text-secondary);">${Credentials.escape(group.description || '')}</p>
+            <p class="group-description" style="color:var(--text-secondary);">${Credentials.escape(group.description || '')}</p>
         </div>
         ${projects.map((project, pIndex) => {
             const projectId = project.id || pIndex;
             return `
-            <div class="project-card" role="button" tabindex="0" onclick="showProjectDetail('${groupId}', '${projectId}')" style="cursor:pointer;">
+            <article class="project-card" onclick="showProjectDetail('${groupId}', '${projectId}')" style="cursor:pointer;">
                 <div class="project-image">
                     ${project.images && project.images.length > 0 ? 
                         `<img src="${Credentials.escape(Credentials.url(project.images[0], true))}" alt="${Credentials.escape(project.title)}">` :
@@ -650,20 +658,22 @@ function showGroup(groupId, navigate = true) {
                 <div class="project-content">
                     <span class="project-tag">${project.technologies?.length || 0} Technologies</span>
                     <h3>${Credentials.escape(project.title)}</h3>
-                    <p>${Credentials.escape(project.description)}</p>
+                    <p class="project-description">${Credentials.escape(project.description)}</p>
                     <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem;">
                         ${project.technologies ? project.technologies.map(tech => 
                             `<span style="background:var(--bg-primary);padding:0.2rem 0.6rem;border-radius:50px;font-size:0.75rem;color:var(--text-secondary);">${Credentials.escape(tech)}</span>`
                         ).join('') : ''}
                     </div>
-                    <div style="margin-top:1rem;color:var(--accent-primary);font-weight:600;font-size:0.9rem;">
-                        Click to view details <i class="fas fa-arrow-right"></i>
-                    </div>
+                    <button type="button" class="project-open">
+                        View project details <span aria-hidden="true">&rarr;</span>
+                    </button>
                 </div>
-            </div>
+            </article>
         `}).join('')}
     `;
 
+    makeExpandable(container.querySelector('.group-description'), 4, group.name);
+    container.querySelectorAll('.project-description').forEach(copy => makeExpandable(copy, 4, 'Project description'));
     document.getElementById('projects').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -696,9 +706,9 @@ function showProjectDetail(groupId, projectId, navigate = true) {
                 <i class="fas fa-arrow-left"></i> Back to ${Credentials.escape(group.name)}
             </button>
         </div>
-        <div style="grid-column:1/-1;background:var(--bg-card);padding:2.5rem;border-radius:16px;border:1px solid var(--border-color);">
-            <h1 style="font-size:2.5rem;font-weight:800;margin-bottom:0.5rem;">${Credentials.escape(project.title)}</h1>
-            <p style="color:var(--text-secondary);font-size:1.1rem;line-height:1.8;">${Credentials.escape(project.description)}</p>
+        <div class="project-detail-summary">
+            <h2>${Credentials.escape(project.title)}</h2>
+            <p class="project-description">${Credentials.escape(project.description)}</p>
             ${project.technologies ? `
                 <div style="margin-top:1.5rem;">
                     <h4 style="margin-bottom:0.5rem;">Technologies</h4>
@@ -709,12 +719,14 @@ function showProjectDetail(groupId, projectId, navigate = true) {
             ` : ''}
             ${project.github || project.demo ? `
                 <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;">
-                    ${project.github ? `<a href="${Credentials.escape(Credentials.url(project.github))}" target="_blank" class="btn-github"><i class="fab fa-github"></i> View on GitHub</a>` : ''}
-                    ${project.demo ? `<a href="${Credentials.escape(Credentials.url(project.demo))}" target="_blank" class="btn primary"><i class="fas fa-external-link-alt"></i> Live Demo</a>` : ''}
+                    ${Credentials.url(project.github) ? `<a href="${Credentials.escape(Credentials.url(project.github))}" target="_blank" rel="noopener noreferrer" class="btn-github"><i class="fab fa-github"></i> View on GitHub</a>` : ''}
+                    ${Credentials.url(project.demo) ? `<a href="${Credentials.escape(Credentials.url(project.demo))}" target="_blank" rel="noopener noreferrer" class="btn primary"><i class="fas fa-external-link-alt"></i> Live Demo</a>` : ''}
                 </div>
             ` : ''}
         </div>
     `;
+
+    makeExpandable(container.querySelector('.project-description'), 4, project.title);
 
     const gallery = document.createElement('div');
     gallery.className = 'project-gallery';
@@ -752,6 +764,7 @@ function showProjectDetail(groupId, projectId, navigate = true) {
         text.textContent = project.readme;
         detail.append(heading, text);
         container.append(detail);
+        makeExpandable(text, 6, 'About this project');
     }
 
     (project.files || []).forEach(file => {
@@ -762,6 +775,8 @@ function showProjectDetail(groupId, projectId, navigate = true) {
         link.textContent = `Download ${file.name || 'project document'}`;
         link.download = file.name || 'project-document';
         link.href = source;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         container.append(link);
     });
     PortfolioApp.renderProjectActions(container, group, project);
@@ -1112,6 +1127,9 @@ function restoreProjectRoute() {
     else showGroups(false);
 }
 window.addEventListener('popstate', restoreProjectRoute);
+window.addEventListener('storage', event => {
+    if (event.key === 'portfolioUpdatedAt') loadPublicData();
+});
 document.addEventListener('keydown', event => {
     if (event.key === 'Tab' && document.body.classList.contains('navigation-open')) {
         const controls = [...navLinks.querySelectorAll('a'), hamburger];
@@ -1119,7 +1137,7 @@ document.addEventListener('keydown', event => {
         else if (!event.shiftKey && document.activeElement === hamburger) { event.preventDefault(); controls[0].focus(); }
     }
     const card = event.target.closest?.('.project-card[role="button"]');
-    if (card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); card.click(); }
+    if (card && event.target === card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); card.click(); }
     if (event.key === 'Escape') closeAuthModal();
     if (event.key === 'Tab' && document.getElementById('authModal').classList.contains('active')) {
         const controls = [...document.getElementById('authModal').querySelectorAll('button, input')].filter(element => element.getClientRects().length && !element.disabled);

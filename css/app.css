@@ -381,6 +381,15 @@
 }
 
 .certificate-controls { display: none; }
+.portfolio-app .project-section-heading h2 { font-size: clamp(1.4rem, 3vw, 2.25rem); overflow-wrap: anywhere; }
+.portfolio-app .project-detail-summary { grid-column: 1 / -1; padding: clamp(1rem, 4vw, 2.5rem); border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-card); }
+.portfolio-app .project-detail-summary h2 { font-size: clamp(1.4rem, 3vw, 2.25rem); line-height: 1.3; margin-bottom: 0.65rem; overflow-wrap: anywhere; }
+.portfolio-app .project-description { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7; }
+.portfolio-app .project-writeup h2 { font-size: clamp(1.1rem, 2vw, 1.5rem); }
+.portfolio-app .project-card .expand-toggle { margin-top: 0.2rem; }
+.portfolio-app .project-card { min-width: 0; overflow-wrap: anywhere; }
+.project-open { display: inline-flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; min-height: 44px; border: 0; padding: 0.4rem 0; color: var(--accent-primary); background: transparent; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.explorer-result p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .nav-backdrop { position: fixed; inset: 0; z-index: 1005; border: 0; background: #0b183a80; backdrop-filter: blur(5px); cursor: pointer; }
 @media (max-width: 1200px) {
     .portfolio-app.navigation-open { overflow: hidden; }

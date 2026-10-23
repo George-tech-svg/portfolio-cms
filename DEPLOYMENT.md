@@ -12,6 +12,8 @@ Build locally first, then create the two deployments from this repository. Neith
 
 ## 1. Deploy the backend on Render
 
+For this update, deploy the backend first, then the frontend. The profile editor now uses the atomic `/api/profile-content` endpoint.
+
 Create a **Web Service** with the Node runtime from the repository root. The included `render.yaml` Blueprint is another way to configure it.
 
 | Setting | Value |
