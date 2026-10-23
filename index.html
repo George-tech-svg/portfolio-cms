@@ -32,7 +32,8 @@
     <div id="load-status" class="load-status" role="status" aria-live="polite">Loading portfolio...</div>
     <a href="login.html" class="admin-dot" title="Admin"></a>
 
-    <nav>
+    <button type="button" id="nav-backdrop" class="nav-backdrop" aria-label="Close navigation" hidden></button>
+    <nav aria-label="Main navigation">
         <div class="container nav-container">
             <a href="#" class="logo" id="logo">George<span>.</span></a>
             <div class="nav-links" id="navLinks">
@@ -171,7 +172,14 @@
                 <h2>My <span>Certifications</span></h2>
                 <p>Professional certifications and credentials</p>
             </div>
-            <div id="certifications-list" class="certifications-grid"></div>
+            <div class="certificate-browser" role="region" aria-label="Certifications">
+                <div id="certifications-list" class="certifications-grid"></div>
+                <div class="certificate-controls">
+                    <button type="button" id="certificate-prev" aria-label="Previous certificate" aria-controls="certifications-list">&lsaquo;</button>
+                    <span id="certificate-position" role="status" aria-live="polite" aria-atomic="true"></span>
+                    <button type="button" id="certificate-next" aria-label="Next certificate" aria-controls="certifications-list">&rsaquo;</button>
+                </div>
+            </div>
         </div>
     </section>
 

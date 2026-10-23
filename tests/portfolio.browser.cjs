@@ -70,6 +70,10 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
     const failures = [];
     function check(condition, message) { if (!condition) failures.push(message); }
     try {
+        if (matchMedia('(max-width: 768px)').matches) {
+            check(getComputedStyle(document.querySelector('.sidebar-btn span')).display !== 'none', 'Phone owner navigation keeps readable section labels');
+            check(parseFloat(getComputedStyle(document.querySelector('.admin-content')).marginLeft) === 0, 'Phone editor uses the full screen width');
+        }
         check(document.getElementById('owner-overview').textContent.includes('2 project inquiries'), 'Owner dashboard shows inquiry totals');
         check(document.querySelectorAll('.owner-checklist button').length === 4, 'Owner dashboard lists content readiness');
         await editCertification(1);
@@ -141,6 +145,34 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         }
         check(!document.querySelector('.cert-description script') && document.querySelector('.cert-description').textContent === window.fixture.certifications[0].description, 'Description text remains safe');
         check(document.querySelector('.certification-card').firstElementChild.className === 'cert-heading', 'Certificate heading precedes photo');
+        const cards = [...document.querySelectorAll('.certification-card')];
+        const visibleCards = () => cards.filter(card => getComputedStyle(card).display !== 'none');
+        const phone = matchMedia('(max-width: 768px)').matches;
+        const nextCertificate = document.getElementById('certificate-next');
+        const previousCertificate = document.getElementById('certificate-prev');
+        if (phone) {
+            check(visibleCards().length === 1 && visibleCards()[0] === cards[0], 'Phone shows one certificate, without a vertical stack');
+            check(nextCertificate.checkVisibility() && nextCertificate.getBoundingClientRect().width >= 36 && nextCertificate.getBoundingClientRect().height >= 44, 'Side arrow has a usable touch target');
+            nextCertificate.click();
+            check(visibleCards()[0] === cards[1] && cards[0].inert && !cards[1].inert && document.getElementById('certificate-position').textContent === '2 / 3', 'Next arrow reveals the next certificate and updates its counter');
+            previousCertificate.click(); previousCertificate.click();
+            check(visibleCards()[0] === cards[2], 'Previous arrow loops to the final certificate');
+            nextCertificate.click();
+            check(visibleCards()[0] === cards[0], 'Next arrow loops to the first certificate');
+            nextCertificate.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            check(visibleCards()[0] === cards[1], 'Keyboard arrows can browse certificates');
+            previousCertificate.click();
+            check(parseFloat(getComputedStyle(document.querySelector('.section-header h2')).fontSize) < 32, 'Phone headings are smaller than desktop headings');
+            check(getComputedStyle(document.getElementById('project-search')).fontSize === '16px', 'Phone inputs keep readable text without focus zoom');
+        } else {
+            check(visibleCards().length === cards.length && cards.every(card => !card.inert), 'Desktop preserves the full certificate grid');
+            check(!nextCertificate.checkVisibility(), 'Carousel arrows stay hidden on desktop');
+        }
+        renderCertifications({ certifications: [] });
+        check(document.querySelector('.certificate-controls').hidden && !document.querySelector('.certification-card'), 'Empty certificate collection hides carousel controls');
+        renderCertifications({ certifications: [window.fixture.certifications[0]] });
+        check(document.querySelector('.certificate-controls').hidden && document.querySelector('.certification-card').checkVisibility(), 'Single certificate stays visible without redundant arrows');
+        renderCertifications(window.fixture);
         check(document.querySelector('#timeline .entry-portrait'), 'Experience uses owner portrait');
         check(document.querySelectorAll('.skill-card')[1].getBoundingClientRect().top >= document.querySelectorAll('.skill-card')[0].getBoundingClientRect().bottom, 'Skill categories appear one after another');
         document.querySelector('.credential-thumbnail').click();
@@ -163,8 +195,18 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         const menu = document.getElementById('hamburger');
         menu.click();
         check(menu.getAttribute('aria-expanded') === 'true' && getComputedStyle(document.getElementById('navLinks')).display !== 'none', 'Mobile navigation opens');
+        if (matchMedia('(max-width: 1200px)').matches) {
+            check(!document.getElementById('nav-backdrop').hidden && document.body.classList.contains('navigation-open'), 'Phone menu opens with its backdrop and scroll lock');
+            document.getElementById('nav-backdrop').click();
+            check(menu.getAttribute('aria-expanded') === 'false' && !document.body.classList.contains('navigation-open'), 'Backdrop closes navigation');
+            menu.click();
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            check(menu.getAttribute('aria-expanded') === 'false' && document.activeElement === menu, 'Escape closes menu and restores focus');
+            menu.click();
+        }
         document.querySelector('.nav-links a[href="#certifications"]').click();
         check(menu.getAttribute('aria-expanded') === 'false', 'Section navigation closes mobile menu');
+        check(!document.body.classList.contains('navigation-open'), 'Section navigation releases the scroll lock');
         window.failFetch = true;
         await loadPublicData();
         check(!document.getElementById('load-status').hidden && document.querySelector('#load-status button'), 'Failed data load offers retry');

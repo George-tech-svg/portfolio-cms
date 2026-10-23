@@ -391,14 +391,59 @@ function renderEducation(data) {
 // RENDER CERTIFICATIONS
 // ============================================
 
+let certificateIndex = 0;
+const phoneLayout = window.matchMedia('(max-width: 768px)');
+
+function updateCertificateBrowser() {
+    const cards = [...document.querySelectorAll('#certifications-list .certification-card')];
+    certificateIndex = Math.max(0, Math.min(certificateIndex, cards.length - 1));
+    cards.forEach((card, index) => {
+        card.classList.toggle('is-current', index === certificateIndex);
+        card.inert = phoneLayout.matches && index !== certificateIndex;
+        if (phoneLayout.matches) {
+            card.setAttribute('role', 'group');
+            card.setAttribute('aria-roledescription', 'slide');
+            card.setAttribute('aria-label', `${index + 1} of ${cards.length}`);
+        } else {
+            card.removeAttribute('role');
+            card.removeAttribute('aria-roledescription');
+            card.removeAttribute('aria-label');
+        }
+    });
+    document.querySelector('.certificate-controls').hidden = cards.length < 2;
+    document.getElementById('certificate-position').textContent = cards.length ? `${certificateIndex + 1} / ${cards.length}` : '';
+    // Keep both arrows available: the collection loops at either end.
+}
+
+function moveCertificate(direction) {
+    const count = document.querySelectorAll('#certifications-list .certification-card').length;
+    if (!count) return;
+    certificateIndex = (certificateIndex + direction + count) % count;
+    updateCertificateBrowser();
+}
+
+phoneLayout.addEventListener('change', updateCertificateBrowser);
+document.getElementById('certificate-prev').addEventListener('click', () => moveCertificate(-1));
+document.getElementById('certificate-next').addEventListener('click', () => moveCertificate(1));
+document.querySelector('.certificate-browser').addEventListener('keydown', event => {
+    if (!phoneLayout.matches || event.target.closest('input, textarea, select') || document.querySelectorAll('#certifications-list .certification-card').length < 2) return;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        event.preventDefault();
+        moveCertificate(event.key === 'ArrowRight' ? 1 : -1);
+        if (event.target.closest('.certification-card')) document.getElementById(event.key === 'ArrowRight' ? 'certificate-next' : 'certificate-prev').focus();
+    }
+});
+
 function renderCertifications(data) {
     const grid = document.getElementById('certifications-list');
     if (!grid) return;
 
     grid.replaceChildren();
+    certificateIndex = 0;
     const certificates = data.certifications || [];
     if (!certificates.length) {
         grid.textContent = 'Credentials will be shared here soon.';
+        updateCertificateBrowser();
         return;
     }
     certificates.forEach(cert => {
@@ -451,6 +496,7 @@ function renderCertifications(data) {
         card.append(content);
         grid.append(card);
     });
+    updateCertificateBrowser();
 }
 
 function openCredential(cert) {
@@ -1006,17 +1052,28 @@ if (localStorage.getItem('theme') === 'dark') {
 
 const hamburger = document.getElementById('hamburger');
 const navLinks = document.getElementById('navLinks');
+const navBackdrop = document.getElementById('nav-backdrop');
+function setNavigationOpen(open, restoreFocus = false) {
+    hamburger?.classList.toggle('active', open);
+    hamburger?.setAttribute('aria-expanded', String(open));
+    hamburger?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    navLinks?.classList.toggle('active', open);
+    const overlay = open && window.matchMedia('(max-width: 1200px)').matches;
+    document.body.classList.toggle('navigation-open', overlay);
+    navBackdrop.hidden = !overlay;
+    if (overlay) navLinks?.querySelector('a')?.focus();
+    if (restoreFocus) hamburger?.focus();
+}
+navBackdrop.addEventListener('click', () => setNavigationOpen(false, true));
+window.matchMedia('(max-width: 1200px)').addEventListener('change', () => setNavigationOpen(false));
 if (hamburger) {
     hamburger.addEventListener('click', () => {
-        hamburger.classList.toggle('active');
-        hamburger.setAttribute('aria-expanded', String(hamburger.classList.contains('active')));
-        if (navLinks) navLinks.classList.toggle('active');
+        setNavigationOpen(hamburger.getAttribute('aria-expanded') !== 'true');
     });
 }
 document.querySelectorAll('.nav-links a, .app-dock a').forEach(link => {
     link.addEventListener('click', () => {
-        if (hamburger) { hamburger.classList.remove('active'); hamburger.setAttribute('aria-expanded', 'false'); }
-        if (navLinks) navLinks.classList.remove('active');
+        setNavigationOpen(false);
     });
 });
 
@@ -1050,7 +1107,12 @@ function restoreProjectRoute() {
 }
 window.addEventListener('popstate', restoreProjectRoute);
 document.addEventListener('keydown', event => {
-    const card = event.target.closest('.project-card[role="button"]');
+    if (event.key === 'Tab' && document.body.classList.contains('navigation-open')) {
+        const controls = [...navLinks.querySelectorAll('a'), hamburger];
+        if (event.shiftKey && document.activeElement === controls[0]) { event.preventDefault(); hamburger.focus(); }
+        else if (!event.shiftKey && document.activeElement === hamburger) { event.preventDefault(); controls[0].focus(); }
+    }
+    const card = event.target.closest?.('.project-card[role="button"]');
     if (card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); card.click(); }
     if (event.key === 'Escape') closeAuthModal();
     if (event.key === 'Tab' && document.getElementById('authModal').classList.contains('active')) {
@@ -1060,9 +1122,7 @@ document.addEventListener('keydown', event => {
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
     if (event.key === 'Escape' && hamburger) {
-        hamburger.classList.remove('active');
-        hamburger.setAttribute('aria-expanded', 'false');
-        navLinks?.classList.remove('active');
+        if (hamburger.getAttribute('aria-expanded') === 'true') setNavigationOpen(false, true);
     }
 });
 if ('IntersectionObserver' in window) {
