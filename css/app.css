@@ -323,3 +323,57 @@
 @media (prefers-reduced-motion: reduce) {
     .portfolio-app *, .portfolio-app *::before, .portfolio-app *::after { transition: none !important; animation: none !important; }
 }
+
+/* Compact content rhythm, shared across every portfolio section. */
+.portfolio-app { --expand-green: #087848; --credential-blue: #225bc4; }
+.portfolio-app.dark { --expand-green: #6ee7a8; --credential-blue: #8dbaff; }
+.portfolio-app section:not(.hero) { padding-block: 2.75rem; }
+.portfolio-app .section-header { margin-bottom: 1.5rem; }
+.portfolio-app .about-content,
+.portfolio-app .about-content:has(.about-image img[style*="display: none"]) { display: block; max-width: 1200px; }
+.portfolio-app .about-image { float: left; width: 44px; height: 44px; margin: 0 0.85rem 0.5rem 0; }
+.portfolio-app .about-image img, .entry-portrait { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 2px solid var(--bg-card); box-shadow: 0 0 0 1px var(--border-color); }
+.portfolio-app .about-text h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin-bottom: 1rem; }
+.portfolio-app .about-text { min-width: 0; }
+.expandable-copy:not(.is-expanded) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--preview-lines); line-clamp: var(--preview-lines); overflow: hidden; }
+.portfolio-app .expandable-copy { line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; margin-bottom: 0; }
+.portfolio-app .expandable-copy > p { margin: 0; line-height: inherit; }
+.portfolio-app .expandable-copy > p + p { margin-top: 0.6rem; }
+.portfolio-app .expand-toggle { display: inline-block; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--expand-green); text-decoration: underline; text-underline-offset: 3px; background: transparent; border: 0; padding: 0.35rem 0; cursor: pointer; }
+.portfolio-app .expand-toggle[hidden] { display: none; }
+.portfolio-app .expand-toggle:hover { text-decoration-thickness: 2px; }
+.portfolio-app .expand-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.portfolio-app .skills-grid { display: flex; flex-direction: column; gap: 0; }
+.portfolio-app .skill-card { padding: 1rem 0; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; box-shadow: none; }
+.portfolio-app .skill-card:hover { transform: none; box-shadow: none; }
+.portfolio-app .skill-icon { display: none; }
+.portfolio-app .skill-card h3 { margin: 0 0 0.65rem; }
+.portfolio-app .skill-tags { justify-content: flex-start; gap: 0.45rem; }
+.portfolio-app .skill-tag { padding: 0.3rem 0.75rem; }
+.portfolio-app .projects-grid:has(.group-card) { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.portfolio-app .group-card { flex: 0 1 auto; min-width: 180px; max-width: 100%; border-radius: 12px; }
+.portfolio-app .group-card .project-content { padding: 1rem 1.2rem; }
+.portfolio-app .group-card h3 { margin-block: 0.35rem; font-size: 1.05rem; }
+.portfolio-app .group-card .project-tag { font-size: 0.7rem; }
+.category-link { font-size: 0.8rem; color: var(--expand-green); }
+.portfolio-app .timeline { padding-left: 0; display: grid; gap: 0.85rem; }
+.portfolio-app .timeline::before, .portfolio-app .timeline-item::before { display: none; }
+.portfolio-app .timeline-item { padding: 1.15rem; margin-bottom: 0; }
+.entry-portrait { float: left; margin: 0 0.8rem 0.5rem 0; }
+.portfolio-app .timeline-item .expandable-copy { clear: both; }
+.portfolio-app .education-card { padding: 1.15rem; }
+.portfolio-app .education-card .edu-icon { font-size: 1.2rem; margin-bottom: 0.5rem; }
+.portfolio-app .education-grid, .portfolio-app .certifications-grid { gap: 1rem; align-items: start; }
+.portfolio-app .certification-card { padding: 1rem; }
+.cert-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.65rem; margin-bottom: 0.7rem; }
+.portfolio-app .cert-heading h3 { text-transform: uppercase; color: var(--credential-blue); font-size: 1.15rem; margin: 0; line-height: 1.35; }
+.portfolio-app .cert-heading .cert-issuer, .portfolio-app .cert-heading .cert-date { color: var(--expand-green); font-size: 0.75rem; margin: 0; }
+.portfolio-app .credential-preview { aspect-ratio: auto; height: 160px; padding: 0.5rem; }
+.portfolio-app .credential-thumbnail { margin-bottom: 0.45rem; }
+.portfolio-app .credential-content { padding: 0; }
+.portfolio-app .certification-card .cert-description { padding: 0; border: 0; background: transparent; border-radius: 0; margin: 0; font-size: 0.85rem; }
+.portfolio-app .certification-card .cert-actions { padding-top: 0.6rem; margin-top: 0.5rem; }
+@media (max-width: 600px) {
+    .portfolio-app section:not(.hero) { padding-block: 2rem; }
+    .portfolio-app .group-card { flex: 1 1 150px; min-width: 0; }
+}

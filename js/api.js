@@ -15,6 +15,7 @@ window.PortfolioAPI = {
             return response;
         } catch (error) {
             if (error.name === 'AbortError') throw new Error('The server is taking too long to respond. Please try again.');
+            if (error instanceof TypeError) throw new Error('Cannot reach the portfolio server. It may be starting or unavailable. Try again shortly; the site owner should check the API address and allowed frontend origin.');
             throw error;
         } finally { clearTimeout(timeout); }
     }

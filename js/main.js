@@ -70,6 +70,8 @@ async function loadPublicData() {
 // ============================================
 
 function renderPublicPortfolio() {
+    expandableObserver.disconnect();
+    document.querySelectorAll('.expand-toggle').forEach(button => button.remove());
     console.log('Rendering portfolio...');
     const data = portfolioData;
 
@@ -106,8 +108,8 @@ function renderPublicPortfolio() {
         
         // About image
         const aboutImg = document.getElementById('about-img');
-        if (aboutImg && data.personal.aboutImage) {
-            aboutImg.src = data.personal.aboutImage;
+        if (aboutImg && (data.personal.aboutImage || data.personal.profileImage)) {
+            aboutImg.src = Credentials.url(data.personal.aboutImage || data.personal.profileImage, true);
             aboutImg.style.display = 'block';
         } else if (aboutImg) {
             aboutImg.style.display = 'none';
@@ -157,6 +159,7 @@ function renderPublicPortfolio() {
                     container.appendChild(para);
                 }
             });
+            makeExpandable(container, 5, 'About me');
         }
     }
 
@@ -261,15 +264,11 @@ function renderProjectGroups(data) {
         const groupId = group.id || index;
         return `
         <div class="project-card group-card" role="button" tabindex="0" onclick="showGroup('${groupId}')" style="cursor:pointer;">
-            <div class="project-image category-cover">
-                <i class="${Credentials.escape(group.icon || 'fas fa-folder')}" style="font-size:4rem;color:white;opacity:0.9;"></i>
-            </div>
             <div class="project-content">
                 <span class="project-tag">${group.projects?.length || 0} Projects</span>
                 <h3>${Credentials.escape(group.name)}</h3>
-                <p>${Credentials.escape(group.description || 'Click to view projects in this category')}</p>
-                <div style="margin-top:1rem;color:var(--accent-primary);font-weight:600;">
-                    View Projects <i class="fas fa-arrow-right"></i>
+                <div class="category-link">
+                    View the projects <i class="fas fa-arrow-right" aria-hidden="true"></i>
                 </div>
             </div>
         </div>
@@ -279,6 +278,53 @@ function renderProjectGroups(data) {
 // ============================================
 // RENDER EXPERIENCE
 // ============================================
+
+let expandableId = 0;
+const expandableObserver = new ResizeObserver(entries => {
+    for (const { target } of entries) {
+        const button = target.nextElementSibling;
+        if (button?.classList.contains('expand-toggle') && button.getAttribute('aria-expanded') === 'false') {
+            button.hidden = target.scrollHeight <= target.clientHeight + 1;
+        }
+    }
+});
+
+function makeExpandable(content, lines, label = 'description') {
+    if (!content || !content.textContent.trim()) return;
+    content.classList.add('expandable-copy');
+    content.style.setProperty('--preview-lines', lines);
+    content.id ||= `expandable-${++expandableId}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'expand-toggle';
+    button.textContent = 'more';
+    button.setAttribute('aria-controls', content.id);
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', `Show more: ${label}`);
+    content.after(button);
+    button.addEventListener('click', () => {
+        const expanded = button.getAttribute('aria-expanded') !== 'true';
+        content.classList.toggle('is-expanded', expanded);
+        button.setAttribute('aria-expanded', String(expanded));
+        button.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show more'}: ${label}`);
+        button.textContent = expanded ? 'hide' : 'more';
+    });
+    // Release removed nodes when content is refreshed from the API.
+    expandableObserver.observe(content);
+    requestAnimationFrame(() => { button.hidden = content.scrollHeight <= content.clientHeight + 1; });
+}
+
+function addPortrait(card, data) {
+    const source = Credentials.url(data.personal?.aboutImage || data.personal?.profileImage, true);
+    if (!source) return;
+    const image = document.createElement('img');
+    image.className = 'entry-portrait';
+    image.src = source;
+    image.alt = data.personal?.name || 'My photo';
+    image.loading = 'lazy';
+    image.addEventListener('error', () => image.remove());
+    card.prepend(image);
+}
 
 function renderExperience(data) {
     const timeline = document.getElementById('timeline');
@@ -296,6 +342,8 @@ function renderExperience(data) {
                 <p>${Credentials.escape(exp.description)}</p>
             `;
             timeline.appendChild(div);
+            addPortrait(div, data);
+            makeExpandable(div.querySelector('p'), 4, exp.role);
         });
     } else {
         timeline.innerHTML = `
@@ -328,6 +376,7 @@ function renderEducation(data) {
                 ${edu.description ? `<div class="edu-description">${Credentials.escape(edu.description)}</div>` : ''}
             `;
             grid.appendChild(div);
+            makeExpandable(div.querySelector('.edu-description'), 4, edu.institution);
         });
     } else {
         grid.innerHTML = `
@@ -355,6 +404,10 @@ function renderCertifications(data) {
     certificates.forEach(cert => {
         const card = document.createElement('article');
         card.className = 'certification-card';
+        const heading = document.createElement('header');
+        heading.className = 'cert-heading';
+        heading.innerHTML = `<h3>${Credentials.escape(cert.name)}</h3><span class="cert-issuer">${Credentials.escape(cert.issuer)}</span>${cert.date ? `<span class="cert-date">${Credentials.escape(cert.date)}</span>` : ''}`;
+        card.append(heading);
         const file = Credentials.url(cert.file, true);
         const verify = Credentials.url(cert.link);
         const preview = Credentials.preview(file, cert.name);
@@ -368,15 +421,16 @@ function renderCertifications(data) {
         }
         const content = document.createElement('div');
         content.className = 'credential-content';
-        content.innerHTML = `
-            <h3>${Credentials.escape(cert.name)}</h3>
-            <div class="cert-issuer">${Credentials.escape(cert.issuer)}</div>
-            ${cert.date ? `<div class="cert-date">${Credentials.escape(cert.date)}</div>` : ''}
-            ${cert.description?.trim() ? `<details class="credential-description">
-                <summary><span class="description-more">More</span><span class="description-less">Less</span><span class="description-chevron" aria-hidden="true">⌄</span><span class="sr-only"> about ${Credentials.escape(cert.name || 'this credential')}</span></summary>
-                <p class="cert-description">${Credentials.escape(cert.description)}</p>
-            </details>` : ''}
-            <div class="cert-actions"></div>`;
+        if (cert.description?.trim()) {
+            const description = document.createElement('p');
+            description.className = 'cert-description';
+            description.textContent = cert.description;
+            content.append(description);
+            makeExpandable(description, 1, cert.name);
+        }
+        const actionRow = document.createElement('div');
+        actionRow.className = 'cert-actions';
+        content.append(actionRow);
         const actions = content.querySelector('.cert-actions');
         if (file) {
             const view = document.createElement('button');

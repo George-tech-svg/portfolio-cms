@@ -30,7 +30,20 @@ Open `http://127.0.0.1:4173`. The backend reads your private `.env` file; see `.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the order and settings, [the backend environment template](.env.example), and [the public frontend environment template](.env.frontend.example). Frontend builds accept `PUBLIC_API_BASE_URL` and `PUBLIC_SITE_URL`, so new domains do not require source edits. `render.yaml` configures a fresh backend service.
 
-## Verification
+## Recover the owner account
+
+The super user is the single admin account in the `users` table. Passwords are hashed, so reset a forgotten password rather than trying to retrieve it. In a trusted backend terminal with the correct `DATABASE_URL` (or this project's `.env`), run:
+
+```powershell
+npm run admin:recover -- --list
+npm run admin:recover
+```
+
+The first command lists admin usernames. The second asks for the existing username and a new password twice, with password input hidden. Use at least 12 characters (at most 72 UTF-8 bytes). It updates only that account's password and preserves portfolio content. Existing sessions expire normally; recovery does not revoke them. No public password reset endpoint is exposed.
+
+Login now displays invalid credentials separately from server connectivity failures. If the server cannot be reached, check that the API is running, `PUBLIC_API_BASE_URL` points to it, and its `FRONTEND_URL` / `CORS_ORIGINS` include the frontend origin. Local frontend builds read `.env.frontend`; hosting environment settings take priority. Rebuild and redeploy the frontend after changing its API address.
+
+## Verification commands
 
 ```powershell
 npm test

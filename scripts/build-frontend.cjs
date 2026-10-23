@@ -2,6 +2,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
+// Local builds use the public settings file; hosting environment values take priority.
+if (!process.env.VERCEL && fs.existsSync(path.join(root, '.env.frontend'))) {
+    const defaults = require('dotenv').parse(fs.readFileSync(path.join(root, '.env.frontend')));
+    for (const key of ['PUBLIC_API_BASE_URL', 'PUBLIC_SITE_URL']) {
+        if (!process.env[key] && defaults[key]) process.env[key] = defaults[key];
+    }
+}
 function publicURL(value, name) {
     if (!value) return '';
     const parsed = new URL(value);

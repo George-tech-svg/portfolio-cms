@@ -16,10 +16,14 @@ const browser = process.env.PORTFOLIO_TEST_BROWSER || [
 if (!browser) throw new Error('Set PORTFOLIO_TEST_BROWSER to an installed Chromium executable.');
 const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aU1sAAAAASUVORK5CYII=';
 const fixture = {
-    personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist' },
+    personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist', aboutImage: image },
+    about: { paragraphs: [Array(80).fill('A thoughtful approach to data, design, and useful software.').join(' ')] },
+    experience: [{ role: 'Data scientist', company: 'Research team', period: '2024?2026', description: Array(60).fill('Built data products and shared findings.').join(' ') }],
+    education: [{ institution: 'University', degree: 'Computer science', description: Array(60).fill('Research, statistics, and software engineering.').join(' ') }],
+    skills: [{ category: 'Data science', items: ['Python', 'SQL', 'Statistics'] }, { category: 'Machine learning', items: ['Scikit-learn', 'PyTorch'] }],
     projectGroups: [{ id: 1, name: 'Data science', projects: [{ id: 2, title: 'Sample project', images: [image], readme: 'Project explanation', files: [{ name: 'existing.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' }] }] }],
     certifications: [
-        { id: 1, name: 'Image certificate', issuer: 'Test issuer', description: 'Practical skills in data analysis, research, and building useful applications. <script>inert text</script>', file: image, link: 'https://example.com/verify' },
+        { id: 1, name: 'Image certificate', issuer: 'Test issuer', description: Array(30).fill('Practical data analysis and research.').join(' ') + '<script>inert text</script>', file: image, link: 'https://example.com/verify' },
         { id: 2, name: 'PDF certificate', file: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' },
         { id: 3, name: '<img src=x onerror=alert(1)>', link: 'javascript:alert(1)' }
     ]
@@ -124,16 +128,21 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         check(document.querySelectorAll('.certification-card').length === 3, 'All credentials render');
         check(document.querySelector('.credential-preview img')?.src.startsWith('data:image/png'), 'Actual uploaded photo renders');
         check(document.querySelectorAll('.certification-card')[2].querySelectorAll('img, a').length === 0, 'Untrusted credential text and URL remain inert');
-        const description = document.querySelector('.credential-description');
-        check(description && !description.open && !description.querySelector('p').checkVisibility(), 'Certificate descriptions start collapsed');
-        check(document.querySelectorAll('.credential-description').length === 1, 'Empty descriptions do not add More controls');
-        const more = description.querySelector('summary');
-        more.focus(); more.click();
-        check(description.open && description.querySelector('p').getClientRects().length > 0, 'More reveals the full certificate description');
-        check(!description.querySelector('script') && description.querySelector('p').textContent === window.fixture.certifications[0].description, 'Description text remains safe');
-        check(getComputedStyle(description.querySelector('.description-less')).display !== 'none', 'Expanded description displays Less');
-        more.click();
-        check(!description.open && !document.querySelector('.credential-dialog'), 'Less collapses without opening the document viewer');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        for (const [selector, lines] of [['#about-text', '5'], ['#timeline .expandable-copy', '4'], ['#education-list .expandable-copy', '4'], ['.cert-description', '1']]) {
+            const description = document.querySelector(selector);
+            const more = description.nextElementSibling;
+            check(getComputedStyle(description).webkitLineClamp === lines, selector + ' uses requested line limit');
+            check(more && !more.hidden && more.getAttribute('aria-expanded') === 'false', selector + ' offers more for overflowing text');
+            more.focus(); more.click();
+            check(more.textContent === 'hide' && more.getAttribute('aria-expanded') === 'true' && getComputedStyle(description).webkitLineClamp === 'none', selector + ' expands fully');
+            more.click();
+            check(more.textContent === 'more' && more.getAttribute('aria-expanded') === 'false', selector + ' collapses again');
+        }
+        check(!document.querySelector('.cert-description script') && document.querySelector('.cert-description').textContent === window.fixture.certifications[0].description, 'Description text remains safe');
+        check(document.querySelector('.certification-card').firstElementChild.className === 'cert-heading', 'Certificate heading precedes photo');
+        check(document.querySelector('#timeline .entry-portrait'), 'Experience uses owner portrait');
+        check(document.querySelectorAll('.skill-card')[1].getBoundingClientRect().top >= document.querySelectorAll('.skill-card')[0].getBoundingClientRect().bottom, 'Skill categories appear one after another');
         document.querySelector('.credential-thumbnail').click();
         check(document.querySelector('.credential-dialog')?.open && document.querySelector('.credential-dialog img'), 'Image viewer opens');
         document.querySelector('.credential-dialog button').click();
@@ -206,10 +215,10 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
         check(document.querySelectorAll('.explorer-result').length === 1, 'Category filter finds the right work');
         document.getElementById('clear-project-filters').click();
         check(!document.getElementById('projects-grid').hidden, 'Clear filters restores category browsing');
-        check(document.querySelectorAll('.featured-project').length === 1, 'Recent work is featured on the overview');
+        check(document.querySelectorAll('.featured-project').length === 0 && !document.getElementById('spotlight'), 'Featured projects are removed');
         document.querySelector('[data-inquiry-service=web]').click();
         check(document.getElementById('inquiry-service').value === 'web', 'Service inquiry chooses the right project type');
-        document.querySelector('.featured-project').click();
+        showProjectDetail(1, 2);
         document.querySelector('.project-app-actions a').click();
         check(!document.getElementById('inquiry-context').hidden && document.getElementById('inquiry-context').textContent.includes('Sample project'), 'Project discussion carries context to inquiry');
         document.documentElement.style.scrollBehavior = 'auto';

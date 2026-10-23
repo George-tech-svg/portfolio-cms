@@ -115,27 +115,6 @@ window.PortfolioApp = (() => {
         document.getElementById('credentials-count').textContent = data.certifications?.length || 0;
         document.getElementById('footer-text').textContent = data.footer || `${new Date().getFullYear()} ${name}. Let's build something useful.`;
         document.title = `${name} | Work, Credentials & Collaboration`;
-        const spotlight = document.getElementById('spotlight-grid');
-        spotlight.replaceChildren();
-        const projects = (data.projectGroups || []).flatMap(group => (group.projects || []).map(project => ({ group, project }))).sort((a, b) => Number(b.project.id) - Number(a.project.id)).slice(0, 3);
-        document.getElementById('spotlight').hidden = !projects.length;
-        projects.forEach(({ group, project }, index) => {
-            const button = document.createElement('button'); button.className = 'featured-project';
-            const media = document.createElement('div'); media.className = 'featured-project-media';
-            const placeholder = document.createElement('span'); placeholder.textContent = `0${index + 1}`;
-            const source = Credentials.url(project.images?.[0], true);
-            if (source) {
-                const image = document.createElement('img'); image.src = source; image.alt = project.title; image.loading = 'lazy';
-                image.addEventListener('error', () => media.replaceChildren(placeholder)); media.append(image);
-            } else media.append(placeholder);
-            const content = document.createElement('div'); content.className = 'featured-project-body';
-            const category = document.createElement('span'); category.textContent = group.name;
-            const heading = document.createElement('h3'); heading.textContent = project.title;
-            const description = document.createElement('p'); description.textContent = project.description || 'View the project, its process, and supporting details.';
-            content.append(category, heading, description); button.append(media, content);
-            button.addEventListener('click', () => showProjectDetail(group.id, project.id));
-            spotlight.append(button);
-        });
         search();
     }
     document.getElementById('project-category').addEventListener('change', search);
