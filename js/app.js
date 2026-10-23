@@ -108,10 +108,9 @@ window.PortfolioApp = (() => {
         selector.value = previous;
         const personal = data.personal || {};
         const name = personal.name || 'George Ochieng';
-        document.getElementById('profile-card-name').textContent = name;
         document.getElementById('profile-card-role').textContent = personal.title || 'Data Scientist & Web Developer';
         document.getElementById('profile-monogram').textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase();
-        document.getElementById('profile-monogram').hidden = Boolean(personal.profileImage);
+        document.getElementById('profile-monogram').hidden = Boolean(personal.profileImage || personal.aboutImage);
         document.getElementById('credentials-count').textContent = data.certifications?.length || 0;
         document.getElementById('footer-text').textContent = data.footer || `${new Date().getFullYear()} ${name}. Let's build something useful.`;
         document.title = `${name} | Work, Credentials & Collaboration`;

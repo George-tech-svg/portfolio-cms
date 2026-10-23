@@ -16,7 +16,7 @@ const browser = process.env.PORTFOLIO_TEST_BROWSER || [
 if (!browser) throw new Error('Set PORTFOLIO_TEST_BROWSER to an installed Chromium executable.');
 const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aU1sAAAAASUVORK5CYII=';
 const fixture = {
-    personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist', aboutImage: image },
+    personal: { name: 'Portfolio Test', heroSubtitle: 'Data scientist', welcomeMessage: 'I turn complex data into useful decisions and build thoughtful digital experiences.', aboutImage: image },
     about: { paragraphs: [Array(80).fill('A thoughtful approach to data, design, and useful software.').join(' ')] },
     experience: [{ role: 'Data scientist', company: 'Research team', period: '2024?2026', description: Array(60).fill('Built data products and shared findings.').join(' ') }],
     education: [{ institution: 'University', degree: 'Computer science', description: Array(60).fill('Research, statistics, and software engineering.').join(' ') }],
@@ -129,6 +129,27 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
     function check(condition, message) { if (!condition) failures.push(message); }
     try {
         check(document.getElementById('load-status').hidden, 'Loading status clears after success');
+        const sectionOrder = [...document.querySelectorAll('body > section')].map(section => section.id);
+        check(sectionOrder.join(',') === 'hero,about,education,certifications,projects,experience,skills,services,contact', 'The document follows the requested visitor reading order');
+        const navigationOrder = [...document.querySelectorAll('.nav-links a')].map(link => link.hash);
+        check(navigationOrder.join(',') === '#about,#education,#certifications,#projects,#experience,#skills,#contact', 'Navigation matches the page flow');
+        check([...document.querySelectorAll('.quick-nav-links a')].map(link => link.hash).join(',') === navigationOrder.join(','), 'Quick navigation follows the same order');
+        const introduction = document.getElementById('welcome-message');
+        const portrait = document.querySelector('.hero-image');
+        const heading = document.getElementById('hero-title');
+        check(introduction.textContent === window.fixture.personal.welcomeMessage, 'The existing cover letter content leads the introduction');
+        check(Boolean(portrait.compareDocumentPosition(introduction) & Node.DOCUMENT_POSITION_FOLLOWING) && Boolean(introduction.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING), 'Photo, introduction and name share the same visual and document order');
+        check(introduction.getBoundingClientRect().bottom <= heading.getBoundingClientRect().top + 1, 'The introduction appears above the name');
+        if (matchMedia('(max-width: 768px)').matches) {
+            check(portrait.getBoundingClientRect().bottom <= introduction.getBoundingClientRect().top, 'Phone layout begins with the profile photo');
+        } else {
+            check(portrait.getBoundingClientRect().right <= introduction.getBoundingClientRect().left, 'Desktop layout leads with the photo on the left');
+        }
+        for (const card of document.querySelectorAll('.skill-card')) {
+            const style = getComputedStyle(card);
+            check(parseFloat(style.borderTopWidth) > 0 && parseFloat(style.borderRadius) > 0 && parseFloat(style.paddingLeft) >= 16 && style.backgroundColor !== 'rgba(0, 0, 0, 0)', 'Each skill category has its own padded, bordered box');
+            check(getComputedStyle(card.querySelector('.skill-tags')).display === 'flex', 'Skills remain horizontal within each category');
+        }
         check(document.querySelectorAll('.certification-card').length === 3, 'All credentials render');
         check(document.querySelector('.credential-preview img')?.src.startsWith('data:image/png'), 'Actual uploaded photo renders');
         check(document.querySelectorAll('.certification-card')[2].querySelectorAll('img, a').length === 0, 'Untrusted credential text and URL remain inert');

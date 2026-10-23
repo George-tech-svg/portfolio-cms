@@ -343,8 +343,10 @@
 .portfolio-app .expand-toggle[hidden] { display: none; }
 .portfolio-app .expand-toggle:hover { text-decoration-thickness: 2px; }
 .portfolio-app .expand-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
-.portfolio-app .skills-grid { display: flex; flex-direction: column; gap: 0; }
-.portfolio-app .skill-card { padding: 1rem 0; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; box-shadow: none; }
+.portfolio-app .skills-grid { display: flex; flex-direction: column; gap: 1rem; }
+.portfolio-app .skill-card { padding: 1.25rem 1.5rem; border: 1px solid var(--border-color); border-inline-start: 3px solid var(--accent-primary); border-radius: 16px; background: var(--bg-card); box-shadow: 0 4px 18px #25356706; }
+.portfolio-app .skill-card:nth-child(3n + 2) { border-top-color: var(--border-color); border-inline-start-color: var(--accent-secondary); }
+.portfolio-app .skill-card:nth-child(3n + 3) { border-top-color: var(--border-color); border-inline-start-color: var(--warm-accent); }
 .portfolio-app .skill-card:hover { transform: none; box-shadow: none; }
 .portfolio-app .skill-icon { display: none; }
 .portfolio-app .skill-card h3 { margin: 0 0 0.65rem; }
@@ -463,7 +465,7 @@
     .portfolio-app .project-content { padding: 1rem; }
     .portfolio-app .project-content h3 { font-size: 1rem; }
     .portfolio-app .project-content p, .portfolio-app .project-readme { font-size: 0.85rem; line-height: 1.7; }
-    .portfolio-app .skill-card { padding-block: 0.85rem; }
+    .portfolio-app .skill-card { padding: 1rem; border-radius: 14px; }
     .portfolio-app .skill-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
     .portfolio-app .skill-tags { gap: 0.35rem; }
     .portfolio-app .skill-tag { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
@@ -513,4 +515,31 @@
     .portfolio-app .credential-toolbar h2 { font-size: 0.95rem; }
     .portfolio-app .credential-toolbar .btn { font-size: 0.75rem; min-height: 44px; }
     .portfolio-app .footer-content { gap: 0.75rem; font-size: 0.75rem; }
+}
+
+/* Lead with the portrait and introduction, then continue through the biography. */
+.portfolio-app #hero { min-height: auto; padding-block: 8.5rem 3rem; }
+.portfolio-app .hero-content { grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr); align-items: start; gap: clamp(1.5rem, 4vw, 3.5rem); }
+.portfolio-app .hero-image { justify-content: flex-start; padding: 0; }
+.portfolio-app .hero-content .profile-card { max-width: 300px; width: 100%; transform: none; box-shadow: 0 12px 35px #25356710; }
+.portfolio-app .hero-content .profile-card:hover { transform: none; }
+.portfolio-app .profile-card-details { padding: 0.85rem 0 0.1rem; }
+.portfolio-app .profile-card-details p { font-size: 0.85rem; line-height: 1.6; margin: 0; }
+.portfolio-app .hero-text .eyebrow { margin-bottom: 0.8rem; }
+.portfolio-app .hero-text .badge { margin-bottom: 0.8rem; }
+.portfolio-app .hero-text .hero-introduction { font-size: 1rem; line-height: 1.8; color: var(--text-secondary); margin: 0 0 1rem; max-width: none; }
+.portfolio-app .hero-introduction + .expand-toggle:not([hidden]) { margin-top: -0.5rem; margin-bottom: 0.75rem; }
+.portfolio-app .hero-text h1 { font-size: clamp(2.2rem, 4.2vw, 3.6rem); line-height: 1.12; }
+.portfolio-app .hero-text > #hero-subtitle { margin: 1rem 0 1.25rem; font-size: 0.95rem; }
+.portfolio-app #about { border-block: 1px solid var(--border-color); }
+@media (max-width: 768px) {
+    .portfolio-app #hero { padding-block: 5.75rem 1.8rem; }
+    .portfolio-app .hero-content { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+    .portfolio-app .hero-content .profile-card { max-width: none; grid-template-columns: 84px minmax(0, 1fr); }
+    .portfolio-app .profile-wrapper { width: 84px; height: 84px; }
+    .portfolio-app .profile-card-details { padding: 0; }
+    .portfolio-app .profile-card-details p { font-size: 0.8rem; }
+    .portfolio-app .hero-text .hero-introduction { font-size: 0.87rem; line-height: 1.75; margin-bottom: 0.8rem; }
+    .portfolio-app .hero-text h1 { font-size: clamp(1.9rem, 8vw, 2.6rem); }
+    .portfolio-app .hero-text > #hero-subtitle { font-size: 0.85rem; }
 }

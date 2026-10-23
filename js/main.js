@@ -99,8 +99,9 @@ function renderPublicPortfolio() {
         
         // Profile image
         const profileImg = document.getElementById('profile-img');
-        if (profileImg && data.personal.profileImage) {
-            profileImg.src = data.personal.profileImage;
+        if (profileImg && (data.personal.profileImage || data.personal.aboutImage)) {
+            profileImg.src = Credentials.url(data.personal.profileImage || data.personal.aboutImage, true);
+            profileImg.alt = data.personal.name || 'Profile photo';
             profileImg.style.display = 'block';
         } else if (profileImg) {
             profileImg.style.display = 'none';
@@ -181,7 +182,11 @@ function renderPublicPortfolio() {
     // --- Social Links ---
     renderSocialLinks(data);
     PortfolioApp.setData(data);
-    document.getElementById('welcome-message').textContent = data.personal?.welcomeMessage || '';
+    const introduction = document.getElementById('welcome-message');
+    introduction.textContent = data.personal?.welcomeMessage?.trim() || data.personal?.heroSubtitle?.trim() || '';
+    introduction.hidden = !introduction.textContent;
+    makeExpandable(introduction, 4, 'Personal introduction');
+    document.getElementById('hero-subtitle').hidden = document.getElementById('hero-subtitle').textContent.trim() === introduction.textContent;
     const welcome = document.getElementById('welcome-video');
     const welcomeURL = Credentials.mediaURL(data.videos?.welcome);
     welcome.hidden = !welcomeURL;
@@ -292,6 +297,7 @@ const expandableObserver = new ResizeObserver(entries => {
 function makeExpandable(content, lines, label = 'description') {
     if (!content || !content.textContent.trim()) return;
     content.classList.add('expandable-copy');
+    content.classList.remove('is-expanded');
     content.style.setProperty('--preview-lines', lines);
     content.id ||= `expandable-${++expandableId}`;
     const button = document.createElement('button');

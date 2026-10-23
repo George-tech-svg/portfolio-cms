@@ -37,12 +37,12 @@
         <div class="container nav-container">
             <a href="#" class="logo" id="logo">George<span>.</span></a>
             <div class="nav-links" id="navLinks">
-                <a href="#projects">Projects</a>
-                <a href="#skills">Skills</a>
                 <a href="#about">About</a>
-                <a href="#experience">Experience</a>
                 <a href="#education">Education</a>
                 <a href="#certifications">Certifications</a>
+                <a href="#projects">Projects</a>
+                <a href="#experience">Experience</a>
+                <a href="#skills">Skills</a>
                 <a href="#contact">Contact</a>
             </div>
             <div class="nav-actions">
@@ -56,9 +56,20 @@
 
     <section id="hero">
         <div class="container hero-content">
+            <div class="hero-image">
+                <div class="profile-card">
+                <div class="profile-card-top"><span>MY PROFILE</span><span class="profile-dot" aria-hidden="true"></span></div>
+                <div class="profile-wrapper">
+                    <div id="profile-monogram" class="profile-monogram" aria-hidden="true">GO</div>
+                    <img src="" alt="Profile" id="profile-img" onerror="this.style.display='none';document.getElementById('profile-monogram').hidden=false;">
+                </div>
+                <div class="profile-card-details"><p id="profile-card-role">Data Scientist &amp; Web Developer</p></div>
+                </div>
+            </div>
             <div class="hero-text">
-                <div class="eyebrow">THE INTERSECTION OF DATA &amp; DIGITAL</div>
+                <div class="eyebrow">A PERSONAL INTRODUCTION</div>
                 <span class="badge" id="hero-badge">👋 Welcome</span>
+                <p id="welcome-message" class="hero-introduction"></p>
                 <h1 id="hero-title">Hi, I'm <span>George.</span></h1>
                 <p id="hero-subtitle">Data science, thoughtful development, and ideas brought to life. Explore what I do, how I work, and what we could build together.</p>
                 <div class="hero-buttons">
@@ -73,59 +84,10 @@
                     <div class="stat"><span class="stat-number" id="credentials-count">0</span><span class="stat-label">Credentials</span></div>
                 </div>
             </div>
-            <div class="hero-image">
-                <div class="profile-card">
-                <div class="profile-card-top"><span>MEET THE BUILDER</span><span class="profile-dot" aria-hidden="true"></span></div>
-                <div class="profile-wrapper">
-                    <div id="profile-monogram" class="profile-monogram" aria-hidden="true">GO</div>
-                    <img src="" alt="Profile" id="profile-img" onerror="this.style.display='none';document.getElementById('profile-monogram').hidden=false;">
-                </div>
-                <div class="profile-card-details"><h2 id="profile-card-name">George Ochieng</h2><p id="profile-card-role">Data Scientist &amp; Web Developer</p></div>
-                <div class="profile-card-links"><a href="#projects">View work <span aria-hidden="true">&rarr;</span></a><a href="#certifications">My credentials <span aria-hidden="true">&rarr;</span></a></div>
-                </div>
-            </div>
         </div>
         <div class="scroll-indicator">
             <span>Scroll</span>
             <i class="fas fa-chevron-down"></i>
-        </div>
-    </section>
-
-    <section id="start-here" class="start-here">
-        <div class="container start-layout"><div><span class="eyebrow">TAKE A CLOSER LOOK</span><h2>More than a first impression.</h2></div>
-            <a href="#projects"><span class="path-number">01</span><div><h3>Explore the work</h3><p>Projects, process, and the tools behind them.</p></div><span aria-hidden="true">&rarr;</span></a>
-            <a href="#certifications"><span class="path-number">02</span><div><h3>See the credentials</h3><p>View the actual certificates and qualifications.</p></div><span aria-hidden="true">&rarr;</span></a>
-            <a href="#contact"><span class="path-number">03</span><div><h3>Build something together</h3><p>Tell me what you have in mind.</p></div><span aria-hidden="true">&rarr;</span></a>
-        </div>
-    </section>
-    <section id="projects">
-        <div class="container">
-            <div class="section-header">
-                <span class="label">My Work</span>
-                <h2>Projects</h2>
-                <p>Explore by category, search for a technology, or save a project to revisit.</p>
-            </div>
-            <div class="project-explorer" role="search" aria-label="Find projects">
-                <div class="project-search-field"><label for="project-search">Find something interesting</label><input id="project-search" type="search" placeholder="Search projects, skills or technologies..." autocomplete="off"></div>
-                <label class="explorer-select">Category<select id="project-category"><option value="">Every category</option></select></label>
-                <label class="explorer-select">Sort by<select id="project-sort"><option value="recent">Newest first</option><option value="title">Project name</option></select></label>
-                <button id="all-projects" class="btn secondary" aria-pressed="false">All projects</button>
-                <button id="saved-projects" class="btn secondary" aria-pressed="false">Saved projects</button>
-            </div>
-            <button type="button" id="clear-project-filters" class="text-link" hidden>Clear filters</button>
-            <p id="project-result-count" class="result-count" role="status" aria-live="polite"></p>
-            <div id="project-results" class="project-results" hidden></div>
-            <div id="projects-grid" class="projects-grid"></div>
-        </div>
-    </section>
-
-    <section id="skills">
-        <div class="container">
-            <div class="section-header">
-                <span class="label">Skills</span>
-                <h2>Skills</h2>
-            </div>
-            <div id="skills-grid" class="skills-grid"></div>
         </div>
     </section>
 
@@ -138,19 +100,8 @@
                 <span class="label">About Me</span>
                 <h2>Passionate about <span>building</span> great software</h2>
                 <div id="about-text"></div>
-                <p id="welcome-message"></p>
                 <video id="welcome-video" controls playsinline preload="metadata" hidden aria-label="An introduction from George"></video>
             </div>
-        </div>
-    </section>
-
-    <section id="experience">
-        <div class="container">
-            <div class="section-header">
-                <span class="label">Experience</span>
-                <h2>Work <span>Experience</span></h2>
-            </div>
-            <div id="timeline" class="timeline"></div>
         </div>
     </section>
 
@@ -183,6 +134,47 @@
         </div>
     </section>
 
+    <section id="projects">
+        <div class="container">
+            <div class="section-header">
+                <span class="label">My Work</span>
+                <h2>Projects</h2>
+                <p>Explore by category, search for a technology, or save a project to revisit.</p>
+            </div>
+            <div class="project-explorer" role="search" aria-label="Find projects">
+                <div class="project-search-field"><label for="project-search">Find something interesting</label><input id="project-search" type="search" placeholder="Search projects, skills or technologies..." autocomplete="off"></div>
+                <label class="explorer-select">Category<select id="project-category"><option value="">Every category</option></select></label>
+                <label class="explorer-select">Sort by<select id="project-sort"><option value="recent">Newest first</option><option value="title">Project name</option></select></label>
+                <button id="all-projects" class="btn secondary" aria-pressed="false">All projects</button>
+                <button id="saved-projects" class="btn secondary" aria-pressed="false">Saved projects</button>
+            </div>
+            <button type="button" id="clear-project-filters" class="text-link" hidden>Clear filters</button>
+            <p id="project-result-count" class="result-count" role="status" aria-live="polite"></p>
+            <div id="project-results" class="project-results" hidden></div>
+            <div id="projects-grid" class="projects-grid"></div>
+        </div>
+    </section>
+
+    <section id="experience">
+        <div class="container">
+            <div class="section-header">
+                <span class="label">Experience</span>
+                <h2>Work <span>Experience</span></h2>
+            </div>
+            <div id="timeline" class="timeline"></div>
+        </div>
+    </section>
+
+    <section id="skills">
+        <div class="container">
+            <div class="section-header">
+                <span class="label">Skills</span>
+                <h2>Skills</h2>
+            </div>
+            <div id="skills-grid" class="skills-grid"></div>
+        </div>
+    </section>
+
     <section id="services" class="collaborate-section"><div class="container"><div class="section-header"><span class="label">Let's work together</span><h2>Your next idea. <span>Our starting point.</span></h2><p>A clear conversation is the first step to useful work.</p></div>
         <div class="collaborate-grid">
             <article><span class="service-symbol" aria-hidden="true">01 /</span><h3>Make sense of your data</h3><p>Let's discuss the questions you want to answer, the data you have, and what better decisions would look like.</p><a href="#contact" data-inquiry-service="data">Discuss a data project &rarr;</a></article>
@@ -191,6 +183,7 @@
         </div>
         <div class="working-process"><span>HOW WE START</span><p><b>01</b> Share the challenge</p><p><b>02</b> Define the scope</p><p><b>03</b> Agree on next steps</p></div>
     </div></section>
+
     <section id="contact">
         <div class="container">
             <div class="section-header">
@@ -279,7 +272,7 @@
         </div>
     </section>
 
-    <dialog id="quick-nav" class="quick-nav-dialog" aria-labelledby="quick-nav-title"><div class="credential-toolbar"><h2 id="quick-nav-title">Where would you like to go?</h2><button type="button" class="btn secondary" id="close-quick-nav">Close</button></div><p>Explore the app, or jump straight to a conversation.</p><div class="quick-nav-links"><a href="#projects">Explore projects <span>01</span></a><a href="#certifications">Certificates &amp; credentials <span>02</span></a><a href="#about">About me <span>03</span></a><a href="#experience">Experience &amp; background <span>04</span></a><a href="#contact">Discuss a project <span>05</span></a></div></dialog>
+    <dialog id="quick-nav" class="quick-nav-dialog" aria-labelledby="quick-nav-title"><div class="credential-toolbar"><h2 id="quick-nav-title">Where would you like to go?</h2><button type="button" class="btn secondary" id="close-quick-nav">Close</button></div><p>Explore the app, or jump straight to a conversation.</p><div class="quick-nav-links"><a href="#about">About <span>01</span></a><a href="#education">Education <span>02</span></a><a href="#certifications">Certifications <span>03</span></a><a href="#projects">Projects <span>04</span></a><a href="#experience">Experience <span>05</span></a><a href="#skills">Skills <span>06</span></a><a href="#contact">Contact <span>07</span></a></div></dialog>
     <div id="authModal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
         <div class="auth-modal-content">
             <button class="close-modal" id="closeAuthModal">&times;</button>
@@ -323,7 +316,7 @@
     </div>
 
     <nav class="app-dock" aria-label="Quick navigation">
-        <a href="#projects">Explore</a><a href="#certifications">Credentials</a><a href="#about">About me</a><a href="#contact">Connect</a>
+        <a href="#about">About</a><a href="#education">Education</a><a href="#certifications">Credentials</a><a href="#projects">Projects</a><a href="#contact">Contact</a>
     </nav>
     <footer>
         <div class="container footer-content">
